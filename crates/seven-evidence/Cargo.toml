@@ -1,0 +1,18 @@
+[package]
+name = "seven-evidence"
+version = "0.1.0"
+edition = "2024"
+description = "Seven Evidence (S03/S15): deterministic identity, provenance, authentication."
+
+[dependencies]
+seven-core.workspace = true
+serde.workspace = true
+blake3.workspace = true
+ed25519-dalek.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

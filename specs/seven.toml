@@ -1,0 +1,76 @@
+# Mētis Avionics/Seven — System Specification (authoritative)
+# TOML projection of spec v0.1.0. Markdown source of truth lives in the
+# project history; this file is what compliance checks run against.
+
+[project]
+name = "Mētis Avionics/Seven"
+version = "0.1.0"
+kind = "experimental-research"
+classification = "NOT-OPERATIONAL"
+
+[purpose]
+statement = "Maintain authenticated, provenance-aware physical-state observations across progressively degraded communications."
+research_question = "Can independent nodes maintain deterministic, provenance-aware probabilistic aviation state while comms become unreliable/partitioned/delayed/duplicated/reordered/unavailable?"
+
+[safety_boundary]  # §21 — hard constraints; violating any = P0 bug.
+never_issue_atc_clearances = true
+never_command_aircraft = true
+never_provide_separation_assurance = true
+never_autonomously_direct_aircraft = true
+never_claim_certification = true
+never_represent_experimental_state_as_authoritative = true
+
+[composition]  # §2 — compose, never recreate.
+owns = ["aviation_physical_state_semantics", "canonicalization", "quaternion_representation", "evidence", "provenance", "bayesian_inference", "aviation_failure_models"]
+themql_owns = ["message_semantics", "generic_runtime_transport_abstractions"]
+thesix_owns = ["cache_state_policy", "tier_behaviour", "generation_freshness_semantics"]
+helixdb_owns = ["persistent_graph_state_storage"]
+transport_adapters_own = ["quic_mechanics", "lora_meshtastic_mechanics", "fragmentation_reassembly", "transport_specific_failure_behaviour"]
+
+[invariants]  # §22 — core invariants; each maps to ≥1 named test in VERIFICATION.md.
+#  1..17; tests are referenced by stable slugs.
+ids = [
+  "canonicalization_deterministic",              # 1
+  "canonicalization_idempotent",                 # 2
+  "quaternion_sign_equivalence",                 # 3
+  "invalid_physical_states_rejected",            # 4
+  "evidence_identity_deterministic",             # 5
+  "forwarding_not_independent_evidence",         # 6
+  "provenance_preserved",                        # 7
+  "bayesian_updates_deterministic",              # 8
+  "duplicate_evidence_not_independently_counted", # 9
+  "stale_distinguishable_from_current",          # 10
+  "conflicting_evidence_preserved",              # 11
+  "transport_preserves_semantics",               # 12
+  "evidence_sets_converge_beliefs",              # 13
+  "replay_deterministic",                        # 14
+  "persistence_preserves_provenance",            # 15
+  "transport_failure_does_not_corrupt_canonical", # 16
+  "never_operational_authority",                 # 17
+]
+
+[canonicalization]  # §4
+idempotent = true            # C(C(x)) == C(x)
+sign_invariant = true        # C(q) == C(-q)
+
+[definition_of_done_v0_1]  # §23
+items = [
+  "reproducible_build",
+  "respects_primitive_contracts",
+  "canonical_state_exists",
+  "quaternion_normalization_tested",
+  "deterministic_evidence_ids",
+  "provenance_represented",
+  "bayesian_update_deterministic",
+  "duplicate_evidence_detected",
+  "conflicting_evidence_retained",
+  "helixdb_persistence_recovery",
+  "deterministic_replay",
+  "simulated_transport_fault_injection",
+  "property_tests_cover_core_math",
+]
+# QUIC + LoRa are Phase 8–9: after the semantic/replay model is deterministic (§22 ordering).
+
+[phases]
+# This pass implements phases 0–7. QUIC/LoRa/RF-harness are spec-planned as 8–9.
+deferred = ["quic_adapter", "lora_adapter", "rf_physical_harness"]

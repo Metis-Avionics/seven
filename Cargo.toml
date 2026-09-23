@@ -1,0 +1,72 @@
+[workspace]
+resolver = "3"
+# Seven is a workspace; the binary lives in crates/seven-bin so that the
+# domain crates (seven-core, seven-evidence, ...) compose without a root
+# package conflating concerns. theMQL is consumed from crates.io (owner-
+# published 0.1.0); see specs/decisions/0003.
+members = [
+    "crates/*",
+]
+
+[workspace.lints.rust]
+# Mētis family convention (prv, NS-Pro): hard safety floors.
+unsafe_code = "deny"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Noise lints relaxed consistently across Mētis workspaces.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+similar_names = "allow"
+too_many_lines = "allow"
+
+[workspace.dependencies]
+# --- Seven-internal crates -------------------------------------------------
+seven-core = { path = "crates/seven-core" }
+seven-evidence = { path = "crates/seven-evidence" }
+seven-helix = { path = "crates/seven-helix" }
+seven-belief = { path = "crates/seven-belief" }
+seven-replay = { path = "crates/seven-replay" }
+seven-sim = { path = "crates/seven-sim" }
+seven-mql = { path = "crates/seven-mql" }
+seven-six = { path = "crates/seven-six" }
+
+# --- Published Mētis primitives (owner-published; see specs/decisions/) ----
+themql-core = "0.1"
+themql-estimation = "0.1"
+# Exact pin matches the sibling Mētis projects (prv, NS-Pro).
+thesix = { version = "=0.2.3" }
+
+# --- Economic-prv: crates.io (generic stochastic machinery) ----------------
+prv-monte-carlo = "0.2.1"
+
+# --- Third-party ------------------------------------------------------------
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+postcard = { version = "1", features = ["alloc"] }
+blake3 = "1"
+ed25519-dalek = "2"
+# Aligned with theMQL (uuid v7) and helix-db: single rand 0.10 in the graph.
+rand = "0.10"
+uuid = { version = "1", features = ["v4", "serde"] }
+# Canonical codec benchmark pair (decision record specs/decisions/).
+postcard-bench = { package = "postcard", version = "1", features = ["alloc"] }
+borsh = { version = "1", features = ["derive"] }
+helix-db = "3.0.0"
+tokio = { version = "=1.52.4", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+# Test deps are workspace-level so members declare them via workspace=true.
+proptest = "1"
+
+[profile.dev]
+split-debuginfo = "unpacked"
+
+[profile.bench]
+debug = false

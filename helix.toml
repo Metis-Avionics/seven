@@ -1,0 +1,16 @@
+[project]
+name = "seven"
+# CLI 3.2.0: queries are direct POST /v2/query; no bundle directory exists.
+# No docker on this host — podman is the working runtime.
+container_runtime = "podman"
+
+[local.dev]
+port = 6969
+image = "ghcr.io/helixdb/helixdb"
+tag = "v0.0.5"
+# In-memory: avoids podman short-name failure on CLI-managed minio. Recovery
+# semantics are integration-tested via a restart scenario; disk persistence
+# for real deployments follows the S3/`--storage-uri` path upstream intends.
+storage = "memory"
+
+[enterprise]

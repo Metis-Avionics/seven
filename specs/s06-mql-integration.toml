@@ -1,0 +1,25 @@
+# S06 — theMQL Integration
+
+[subsystem]
+name = "mql-integration"
+crate = "seven-mql"
+domain = "seven-owned projection; themql-owned message model"
+
+[projection]  # transports are projections of Message; Seven maps, never competes.
+target = "themql_core::Message (vendored, 0.1.0)"
+payload_carriage = "Payload::Bytes(canonical_bytes, FormatTag::Postcard) — postcard is already a first-class theMQL format"
+provenance_carriage = "Metadata.extensions BTreeMap (deterministic order) + causation_id linking"
+subject_grammar = "seven.<domain>.<subject_id>.evidence"
+no_sevenmessage_abstraction = true
+
+[boundary]
+# themql's TransportKind is closed { Mqtt, Graphql, Sse }. Seven does NOT extend
+# it inside its own authority; QUIC/LoRa adapters project *to/from* Message and
+# remain Phase 8–9. Publishing themql-estimation/message from the owned repo is
+# the follow-up that lets Seven drop the vendor.
+no_transportkind_extension = true
+simulated_transport = "in-memory lossy link with loss/dup/reorder injection (Phase 6)"
+
+[invariants]
+transport_preserves_semantics = true     # invariant 12
+domain_model_has_no_transport_branching = true

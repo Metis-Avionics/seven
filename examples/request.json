@@ -1,0 +1,38 @@
+{
+  "query": {
+    "read": {
+      "entries": [
+        {
+          "query": {
+            "name": "node_count",
+            "root": {
+              "count": {
+                "input": {
+                  "nodes_where": {
+                    "predicate": {
+                      "eq": {
+                        "left": {
+                          "property": "$label"
+                        },
+                        "right": {
+                          "constant": {
+                            "string": "User"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "returns": [
+        "node_count"
+      ]
+    }
+  },
+  "query_name": "node_count",
+  "request_type": "read"
+}

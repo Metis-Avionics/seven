@@ -1,0 +1,18 @@
+[package]
+name = "seven-belief"
+version = "0.1.0"
+edition = "2024"
+description = "Seven Bayesian belief engine (S04): composes themql-estimation, gates via evidence graph."
+
+[dependencies]
+seven-core.workspace = true
+seven-evidence.workspace = true
+themql-estimation.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+ed25519-dalek.workspace = true
+
+[lints]
+workspace = true

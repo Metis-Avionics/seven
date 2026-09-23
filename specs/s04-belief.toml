@@ -1,0 +1,34 @@
+# S04 — Bayesian Engine
+
+[subsystem]
+name = "belief"
+crate = "seven-belief"
+domain = "seven-owned (semantics) / themql-owned (estimator machinery)"
+
+[composition]  # S04/S08 — compose themql-estimation (vendored), do NOT reimplement.
+estimator_source = "vendor/theMQL/crates/themql-estimation (Ekf, Estimator, BayesianEstimator)"
+why = "safety-critical 21-dim EKF with quaternion attitude, stack SMatrix, explicit Q/R — prv's EKF derived from it. prs_core::State is economic-shaped and out of scope."
+seven_owns = ["evidence_gating", "duplicate_rejection_via_evidence_graph", "prior_selection", "likelihood_documentation", "conflict_retention", "belief_lineage"]
+
+[hard_requirements]
+deterministic_update = true      # same prior + same evidence ⇒ same posterior
+explicit_prior = true
+explicit_likelihood = true
+explicit_assumptions = true
+duplicate_evidence_protection = true
+independence_handling = true
+reproducible_numerics = true
+
+[forbidden]
+confidence_accumulation_heuristic = true   # "confidence += confidence" is NOT Bayesian.
+
+[update_invariant]  # §8
+statement = "same prior + same evidence sequence = same posterior"
+tolerance = "bitwise f64 is preferred; where reordering changes FP summation order, tolerance documented at call site"
+
+[state_model]
+# We do NOT push ADS-B/GNSS position reports straight into theMQL's 21-dim IMU
+# EKF; we use the EKF where the physics apply and a linear Gaussian update for
+# independent position evidence. Determinism is the contract; the model is explicit.
+primary = "themql_estimation::Ekf for IMU-fused tracks"
+evidence_update = "linear Gaussian (deterministic) per independent evidence group"

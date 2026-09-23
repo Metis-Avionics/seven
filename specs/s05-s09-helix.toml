@@ -1,0 +1,25 @@
+# S05/S09 — Evidence Graph & HelixDB Persistence
+
+[subsystem]
+name = "persistence"
+crate = "seven-helix"
+domain = "helixdb-owned storage; seven-owned schema"
+
+[client]  # decision: Rust SDK with a checked-in query suite.
+sdk = "helix-db = 3.0.0"
+style = "read_batch()/write_batch() DSL via #[query]/to_query_request; suites live crate-side"
+endpoint_env = "SEVEN_HELIX_URL (default http://127.0.0.1:6969 per helix.toml [local.dev])"
+
+[graph]
+nodes = ["Node", "Evidence", "Source", "Belief"]
+edges = ["FORWARDED_TO", "DERIVED_FROM", "PARENT_OF", "SUPPORTS"]
+
+[required_operations]
+list = ["write_observation", "write_provenance", "write_evidence_relation", "write_belief_state", "read_subject_history", "reconstruct_provenance", "recover_after_restart"]
+
+[invariant]
+persistence_recovery_preserves = ["evidence_identity", "provenance"]
+no_second_persistence_architecture = true
+
+[testing]
+integration = "starts podman dev instance (helix start dev), writes, stops, starts, verifies lineage"

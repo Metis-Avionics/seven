@@ -1,0 +1,46 @@
+# S03 — Evidence
+
+[subsystem]
+name = "evidence"
+crate = "seven-evidence"
+domain = "seven-owned"
+
+[properties]
+required = [
+  "evidence_id",
+  "source_id",
+  "observation_id",
+  "observed_at",
+  "received_at",
+  "expires_at",
+  "payload",
+  "provenance",
+  "parent_evidence_ids",
+  "independence_group",
+  "integrity_metadata",
+  "authentication_metadata",
+]
+
+[identity]  # §6
+formula = "evidence_id = H(canonical_observation_bytes)"
+# H pinned: blake3 (established crate; no invented cryptography).
+hash = "blake3"
+canonical_bytes_source = "seven-core CanonicalState::canonical_bytes()"
+
+[invariants]
+forwarding_preserves_identity = true
+payload_mutation_changes_identity = true
+provenance_never_silently_discarded = true
+duplicate_not_independent = true
+
+[authentication]  # S15. Auth, integrity, provenance are SEPARATE concepts.
+signature = "ed25519-dalek (established crate)"
+integrity = "blake3 hash over canonical bytes"
+provenance = "explicit chain; not implied by signature"
+replay_resistance = "observed_at + expires_at + sequence carried canonically"
+never_invent_crypto = true
+
+[time]  # §11 — never collapse these.
+fields = ["observed_at", "received_at", "expires_at"]
+stale_is_distinguishable = true
+valid_signature_does_not_imply_fresh = true

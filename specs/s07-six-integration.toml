@@ -1,0 +1,19 @@
+# S07 — theSix Integration
+
+[subsystem]
+name = "six-integration"
+crate = "seven-six"
+domain = "seven-owned policy; thesix-owned cache mechanics"
+
+[composition]
+crate = "thesix = =0.2.3 (exact pin, matches prv/NS-Pro)"
+seven_contributes = "AviationCachePolicy impl of thesix::CachePolicy<K,V>"
+seven_must_not = ["select tiers directly", "reimplement single-flight", "reimplement generation handling", "reimplement tier health"]
+
+[aviation_policy]
+# Layered ABOVE theSix as an explicit spec-permitted policy (Phase S07).
+# Rule of thumb: belief state is hot; provenance/evidence is durable; L4
+# persistent tiers are allowed for evidence, while belief can demote freely.
+belief_prefers_hot = true
+evidence_prefers_persistent = true
+deny_anonymous_mutation = true   # composes StrictPolicy-style guard via CachePolicy

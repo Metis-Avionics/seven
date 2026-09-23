@@ -1,0 +1,20 @@
+[package]
+name = "seven-helix"
+version = "0.1.0"
+edition = "2024"
+description = "Seven HelixDB persistence (S05/S09): evidence graph."
+
+[dependencies]
+seven-core.workspace = true
+seven-evidence.workspace = true
+helix-db.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+ed25519-dalek.workspace = true
+
+[lints]
+workspace = true

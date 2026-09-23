@@ -1,0 +1,16 @@
+[package]
+name = "seven-bin"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+seven-core.workspace = true
+seven-evidence.workspace = true
+seven-belief.workspace = true
+seven-replay.workspace = true
+seven-mql.workspace = true
+seven-six.workspace = true
+ed25519-dalek.workspace = true
+
+[lints]
+workspace = true

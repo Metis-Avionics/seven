@@ -1,0 +1,21 @@
+[package]
+name = "seven-replay"
+version = "0.1.0"
+edition = "2024"
+description = "Seven deterministic replay (S12)."
+
+[dependencies]
+seven-core.workspace = true
+seven-evidence.workspace = true
+seven-belief.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+blake3.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+ed25519-dalek.workspace = true
+
+[lints]
+workspace = true

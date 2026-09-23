@@ -1,0 +1,41 @@
+# S02 — Canonical State (Seven-owned)
+
+[subsystem]
+name = "canonical-state"
+crate = "seven-core"
+domain = "seven-owned"
+
+[pipeline]
+order = ["validate", "normalize_units", "normalize_quaternion", "canonical_quaternion_sign", "quantize", "canonical_field_ordering", "canonical_state"]
+
+[invariants]
+idempotence = "C(C(x)) == C(x)"
+sign_equivalence = "C(q) == C(-q)"
+invalid_input_rejected = true
+
+[quaternion]  # §5. Seven owns the hemisphere rule; no Mētis primitive defines one.
+representation = "w, x, y, z (f64 pre-quantization)"
+normalization = "q / ||q||"
+reject_zero_norm = true
+reject_nan = true
+reject_infinite = true
+sign_rule = "hemisphere-first-nonzero-positive; tie order w -> x -> y -> z"
+# First strictly-nonzero component (after normalization, before quantization)
+# is forced positive by negating the whole vector if needed. Ties resolve in
+# axis order. Deterministic: canonical(q) == canonical(-q) === bit-equal bytes.
+
+[quantization]  # precision is part of identity; changing it changes evidence IDs.
+scalar_encoding = "fixed-point i64 with PER-FIELD scale (see CanonicalPolicy)"
+angle_scale = "quaternion components: SCALE_1E6 (i64 of round(v * 1e6))"
+position_scale = "metres: SCALE_1E3 (millimetre resolution)"
+velocity_scale = "m/s: SCALE_1E3"
+timestamp_encoding = "unix nanos i64 (wall-clock kind only for canonical form)"
+missing_value = "explicit Option<> in domain; canonical bytes never encode absent fields as NaN tricks"
+invalid_value = "rejection, not encoding"
+
+[serialization]  # codec pinned by specs/decisions/0001-canonical-codec.md
+rationale = "canonical bytes must be reproducible across independent processes; see benchmark decision record"
+deterministic_field_order = true
+
+[required_tests]  # S02 compliance checklist.
+list = ["idempotence", "sign_equivalence", "zero_quaternion_rejection", "nan_rejection", "infinity_rejection", "precision_boundaries", "unit_conversion", "serialization_determinism"]

@@ -1,0 +1,25 @@
+# S12/S13/S17 — Replay, Simulation, Failure Injection
+
+[subsystem]
+name = "replay-sim"
+crates = ["seven-replay", "seven-sim"]
+domain = "seven-owned"
+
+[replay]  # S12
+events = ["observation", "message", "transport", "node", "persistence", "belief_update"]
+invariant = "identical event stream + identical initial state = equivalent final state"
+determinism = "bitwise where possible; explicit tolerance where FP reorder applies"
+role = "validation mechanism, not debugging convenience"
+
+[simulation]  # S13
+parameters = ["sensor_noise", "packet_loss", "latency", "duplication", "reordering", "clock_skew", "node_failure", "network_partition", "conflicting_observations"]
+# prv-monte-carlo is a git dep, but its State is economic-shaped; Seven's sim
+# uses seeded rand + seven-own state. Decision record specs/decisions/0002 records
+# the audit finding (prv_monte_carlo::Simulator is generic over nothing — it
+# requires prv_core::State, violating S08 composition for aviation). Dep kept
+# pinned for extraction follow-up; not consumed for domain state.
+rng = "rand::rngs::StdRng, SeedableRng; seeds recorded in every event log header"
+
+[failure_injection]  # S17 — every subsystem exposes controllable failure.
+scenarios = ["packet_loss", "packet_duplication", "packet_reordering", "packet_corruption", "node_disappearance", "network_partition", "reconnection", "stale_evidence", "clock_skew", "conflicting_sensors", "invalid_quaternion", "invalid_signature", "db_restart", "db_unavailable"]
+observable_not_swallowed = true

@@ -1,0 +1,22 @@
+[package]
+name = "seven-core"
+version = "0.1.0"
+edition = "2024"
+description = "Seven Core (S01/S02): canonical deterministic aviation physical-state representation."
+
+[dependencies]
+serde.workspace = true
+postcard.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+criterion.workspace = true
+borsh.workspace = true
+
+[[bench]]
+name = "canonical_codec"
+harness = false
+
+[lints]
+workspace = true

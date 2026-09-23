@@ -1,0 +1,22 @@
+[package]
+name = "seven-mql"
+version = "0.1.0"
+edition = "2024"
+description = "Seven ⇄ theMQL projection (S06) + simulated lossy transport."
+
+[dependencies]
+seven-core.workspace = true
+seven-evidence.workspace = true
+themql-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+postcard.workspace = true
+rand.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+ed25519-dalek.workspace = true
+
+[lints]
+workspace = true
