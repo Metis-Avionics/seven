@@ -1,0 +1,10 @@
+[Unit]
+Description=Publish one unpublished seven-* crate to crates.io (rate-limit friendly)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/seven/scripts/publish-seven
+Nice=10
+IOSchedulingClass=idle

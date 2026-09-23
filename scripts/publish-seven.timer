@@ -1,0 +1,10 @@
+[Unit]
+Description=Run seven-publish every 10 minutes until all seven-* crates are on crates.io
+
+[Timer]
+OnBootSec=4min
+OnUnitActiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

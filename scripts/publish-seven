@@ -1,0 +1,53 @@
+#!/usr/bin/env zsh
+# seven-publish — publish exactly one unpublished seven-* crate per invocation,
+# in dependency order. Safe to run repeadly: when everything is published the
+# script exits 0 without touching cargo. Driven by a systemd user timer
+# every 10 minutes (see scripts/publish-seven.timer).
+#
+# Publication order respects the intra-workspace dependency graph so that a
+# dependent's crates.io resolution always finds its seven-* dependency already
+# published.
+
+set -u
+
+WORKSPACE=/home/leo/seven
+CRATES=(seven-core seven-evidence seven-belief seven-replay seven-sim seven-mql seven-six seven-helix)
+LOCK=/tmp/seven-publish.lock
+
+# Best-effort single-flight so overlapping timer ticks never publish twice.
+exec 9>"$LOCK"
+flock -n 9 || exit 0
+
+cd "$WORKSPACE" || exit 1
+
+remaining=()
+for c in "${CRATES[@]}"; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' \
+        -H "User-Agent: seven-publish (dev@metis)" \
+        "https://crates.io/api/v1/crates/$c")
+    if [[ "$code" == "404" ]]; then
+        remaining+=("$c")
+    fi
+done
+
+if (( ${#remaining[@]} == 0 )); then
+    echo "$(date -Is) seven-publish: nothing remaining — all crates live on crates.io"
+    exit 0
+fi
+
+# The first remaining crate is guaranteed to have its dependencies published
+# already (topological order above).
+next=${remaining[1]}
+echo "$(date -Is) publishing $next …"
+output=$(cargo publish -p "$next" --allow-dirty 2>&1)
+rc=$?
+echo "$output"
+
+if (( rc == 0 )); then
+    echo "$(date -Is) ok: $next published"
+else
+    # 429 rate-limit arrives with a "try again after" timestamp; the next
+    # timer tick will simply retry. Other errors are left for a human.
+    echo "$(date -Is) publish failed for $next (rc=$rc) — next timer tick retries"
+fi
+exit 0
