@@ -1,0 +1,64 @@
+# Seven living docs — canonical closeout record (Mētis convention).
+# Rendered to docs/living.md + docs/changelog.md by `prv-cli living update`.
+
+[handover]
+status = "implementation"
+phase = "v0_1_deterministic_core_complete"
+last_updated = "2026-09-23T21:18:00+01:00"
+
+summary = """Spec-driven v0.1 core complete and committed (single commit bd7624b).
+Workspace: 8 domain crates + seven-bin. 40/40 nextest green, clippy
+--all-targets -D warnings silent, release build green. HelixDB evidence graph
+verified live against podman dev instance. Composition rule honored: theMQL,
+theSix, prv, HelixDB consumed as published crates, never reimplemented.
+"""
+
+remaining = [
+  "Phase 8: QUIC transport adapter (requires transport-neutral message model — done)",
+  "Phase 8: LoRa adapter with real Meshtastic payload-budget tests (inspect, don't guess)",
+  "Phase 9: RF physical test harness (distinguish physical vs simulated measurements)",
+  "Publish seven-* crates to crates.io (metadata + READMEs landed this pass)",
+]
+
+decisions = [
+  { id = "D1", description = "Single squashed commit for v0.1 (user decision)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "D2", description = "theMQL consumed from crates.io 0.1 (owner-published); vendoring abandoned (decision 0003)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "D3", description = "Canonical codec = postcard (36B vs 88B Borsh, bench decision 0001); FormatTag::Postcard already exists upstream", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "D4", description = "Quaternion hemisphere rule: first-nonzero-component-positive, tie order w→x→y→z (Seven owns; no Mētis primitive defines it)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "D5", description = "prv-monte-carlo declared but its Simulator not used for aviation state (economic State coupling, decision 0002)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "D6", description = "Belief engine: deterministic linear-Gaussian conjugate for independent evidence; themql-estimation EKF composed for IMU-fused tracks (Phase 8 wiring)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "D7", description = "tokio pinned =1.52.4 (1.53.1 fails internally on rustc 1.98.1)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "D8", description = "HelixDB dev instance uses memory storage under podman (CLI-managed MinIO short-name fails rootless); disk persistence via --storage-uri for real deployments", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "D9", description = "HelixDB endpoint defaults to IPv4 127.0.0.1:6969 — podman pasta forwarding is v4-only", timestamp = "2026-09-23T21:18:00+01:00" },
+]
+
+completed = [
+  { id = "C1", description = "Workspace scaffolded; helix.toml moved to podman", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C2", description = "specs/ v0.1 landed before code (seven.toml + S01–S18 TOMLs)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C3", description = "seven-core canonical pipeline + proptest idempotence (postcard, quantization)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C4", description = "seven-evidence: blake3 EvidenceId, ed25519 signatures, provenance forwarding (invariants 5,6,7,10)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C5", description = "seven-belief: deterministic linear-Gaussian updates, duplicate/conflict gates (8,9,11)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C6", description = "seven-helix query suite + live podman integration (15)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C7", description = "seven-replay double-pass fingerprint (14)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C8", description = "seven-sim LossyChannel with observable fault logging (16)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C9", description = "seven-mql Message projection roundtrip (12)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C10", description = "seven-six AviationCachePolicy over thesix; anonymous mutation denied", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C11", description = "40/40 nextest green, clippy -D warnings silent, release build green", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C12", description = "Codec bench: postcard 36B vs Borsh 88B (decision 0001 evidence)", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C13", description = "specs/VERIFICATION.md maps all 17 spec-§22 invariants to named tests", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C14", description = "Crate READMEs + publish metadata for all seven-* crates", timestamp = "2026-09-23T21:18:00+01:00" },
+]
+
+[handover.next_agent]
+focus = "Phase 8 transports: QUIC and LoRa adapters once the deterministic core above is the stable base."
+tasks = [
+  "Inspect real Meshtastic payload limits before writing the LoRa adapter",
+  "Wire themql-estimation EKF into seven-belief for IMU-fused tracks",
+  "Run `prv-cli living update` after any spec change",
+]
+
+[session]
+start = "2026-09-23T20:00:00+01:00"
+end = "2026-09-23T21:18:00+01:00"
+agent = "opencode"
+type = "spec_driven_v0_1"

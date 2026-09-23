@@ -28,14 +28,15 @@ too_many_lines = "allow"
 
 [workspace.dependencies]
 # --- Seven-internal crates -------------------------------------------------
-seven-core = { path = "crates/seven-core" }
-seven-evidence = { path = "crates/seven-evidence" }
-seven-helix = { path = "crates/seven-helix" }
-seven-belief = { path = "crates/seven-belief" }
-seven-replay = { path = "crates/seven-replay" }
-seven-sim = { path = "crates/seven-sim" }
-seven-mql = { path = "crates/seven-mql" }
-seven-six = { path = "crates/seven-six" }
+# `version` keys make `cargo publish` happy; `path` keeps local development.
+seven-core = { path = "crates/seven-core", version = "0.1.0" }
+seven-evidence = { path = "crates/seven-evidence", version = "0.1.0" }
+seven-helix = { path = "crates/seven-helix", version = "0.1.0" }
+seven-belief = { path = "crates/seven-belief", version = "0.1.0" }
+seven-replay = { path = "crates/seven-replay", version = "0.1.0" }
+seven-sim = { path = "crates/seven-sim", version = "0.1.0" }
+seven-mql = { path = "crates/seven-mql", version = "0.1.0" }
+seven-six = { path = "crates/seven-six", version = "0.1.0" }
 
 # --- Published Mētis primitives (owner-published; see specs/decisions/) ----
 themql-core = "0.1"

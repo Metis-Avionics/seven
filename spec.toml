@@ -1,0 +1,58 @@
+# Root spec for the Seven workspace (Mētis Spec-and-Go convention).
+# prv-cli reads this; specs/*.toml hold the subsystem-level detail.
+
+[project]
+name = "seven"
+full_name = "Mētis Avionics/Seven"
+version = "0.1.0"
+status = "greenfield"
+language = "rust"
+license = "MIT"
+repository = "https://github.com/Metis-Avionics/seven"
+
+description = """
+Experimental distributed aviation-resilience research system. Nodes maintain
+deterministic, provenance-aware probabilistic physical-state observations
+across degraded communications. Seven never issues ATC clearances, commands
+aircraft, or claims operational authority (spec §21).
+"""
+
+[architecture]
+primary_primitive = "canonical_evidence"
+secondary_primitives = ["belief", "provenance", "replay"]
+semantic_owner = "seven-core (canonical state), seven-evidence (identity)"
+
+[architecture.principles]
+compose_over_reimplement = true     # spec §2
+deterministic_first = true
+spec_driven = true
+fail_explicit = true
+no_invented_crypto = true
+safety_boundary_absolute = true     # spec §21
+
+[composition]                     # spec §2 responsibilities
+themql = "message semantics, transport abstractions (themql-core 0.1 / themql-estimation 0.1)"
+thesix = "cache/state policy substrate (thesix =0.2.3)"
+prv    = "generic stochastic machinery (prv-monte-carlo 0.2.1; economic State never imported)"
+helixdb = "persistent graph/state storage (helix-db 3.0.0, Rust SDK)"
+
+[dependencies]
+# Pinned in Cargo.toml workspace table.
+tokio = "=1.52.4 (1.53.1 breaks on rustc 1.98.1)"
+rand = "0.10 (aligned with themql uuid v7 and helix-db)"
+
+[phases.v0_1]
+done = [
+  "canonical_state",
+  "quaternion_invariants",
+  "deterministic_evidence_ids",
+  "provenance_represented",
+  "deterministic_belief",
+  "duplicate_detection",
+  "conflicts_retained",
+  "helixdb_persistence",
+  "deterministic_replay",
+  "simulated_transport_fault_injection",
+  "property_invariant_tests",
+]
+deferred = ["quic_adapter", "lora_adapter", "rf_physical_harness"]   # Phase 8–9 per §22 ordering
