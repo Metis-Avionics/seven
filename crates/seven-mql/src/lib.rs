@@ -83,6 +83,7 @@ pub fn to_message(e: &Evidence, domain: &str) -> MqlResult<Message> {
     let mut meta = Metadata::new();
     meta = meta.with_extension("seven_evidence_id", hex(&e.evidence_id.0));
     meta = meta.with_extension("seven_observation_id", hex(&e.observation_id.0));
+    meta = meta.with_extension("seven_source_id", hex(&e.source_id.0));
     meta = meta.with_extension("seven_provenance", serde_json_value(&e.provenance)?);
     meta = meta.with_extension("seven_expires_at", serde_json_value(&e.expires_at_nanos)?);
     meta = meta.with_extension(
@@ -136,7 +137,13 @@ pub fn from_message(msg: &Message, _original_subject: &seven_core::SubjectId) ->
     let state = seven_core::CanonicalState::from_canonical_bytes(canonical_bytes)
         .map_err(|e| MqlError::Canonical(e.to_string()))?;
 
-    let source_bytes: [u8; 32] = parse_hex32(get("seven_source_id")).map_or([0u8; 32], |id| id.0);
+    // `seven_source_id` present since the source-carriage fix; absent only in
+    // pre-change messages (⇒ zeroed key, legacy). Present-but-malformed is an
+    // explicit error, never silent zeros (§18).
+    let source_bytes: [u8; 32] = match extensions.get("seven_source_id") {
+        None => [0u8; 32],
+        Some(v) => parse_hex32(v.as_str().unwrap_or(""))?.0,
+    };
     let sig = extensions.get("seven_signature").and_then(|v| v.as_str()).map(hex_bytes);
 
     let segs: Vec<String> = msg.subject.segments().iter().map(ToString::to_string).collect();
@@ -284,6 +291,8 @@ mod tests {
         assert_eq!(e.payload, back.payload);
         assert_eq!(e.subject, back.subject);
         assert_eq!(e.expires_at_nanos, back.expires_at_nanos);
+        assert_eq!(e.source_id, back.source_id, "source identity must survive");
+        back.verify().expect("round-tripped evidence verifies: auth survives transport");
     }
 
     /// S06 grammar: subject is `seven.<domain>.<subject_id>.evidence`.

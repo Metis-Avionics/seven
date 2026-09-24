@@ -7,7 +7,7 @@
 use seven_belief::BeliefEngine;
 use seven_core::{CanonicalState, PhysicalObservation, Quaternion, SubjectId};
 use seven_evidence::Evidence;
-use seven_mql::{LossyMql, SEVEN_DOMAIN, to_message};
+use seven_mql::{LossyMql, SEVEN_DOMAIN, from_message, to_message};
 use ed25519_dalek::SigningKey;
 
 fn main() {
@@ -28,8 +28,11 @@ fn main() {
             .expect("evidence constructs");
         let msg = to_message(&evidence, SEVEN_DOMAIN).expect("projection");
         for arrived in link.deliver(msg, t as u64) {
-            drop(arrived); // transport layer hands to domain
-            let included = engine.incorporate(&evidence).expect("verified");
+            // Belief ingests what TRANSPORT delivered (S06 round-trip), not
+            // the pre-transport original — loss/dup then flow through the
+            // evidence dedup gate instead of being bypassed.
+            let recovered = from_message(&arrived, &subject).expect("round-trip");
+            let included = engine.incorporate(&recovered).expect("verified");
             println!("t={t} incorporated={included} evidence_id={:x}", evidence.evidence_id.0[0]);
         }
     }
