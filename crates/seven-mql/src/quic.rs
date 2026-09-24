@@ -213,6 +213,96 @@ pub async fn recv_message(
     serde_json::from_slice(&body).map_err(|e| MqlError::Quic(format!("json decode failed: {e}")))
 }
 
+/// Send a batch of messages over a single stream: `[count_be32][frame ×
+/// count]`, then finish. One stream per batch (not per message) amortizes
+/// stream setup for node syncs. An explicit count prefix — rather than
+/// read-until-finish — keeps framing unambiguous without EOF edge cases.
+/// An empty batch is valid and yields zero frames.
+///
+/// # Errors
+/// Stream open/write/finish failures, or any oversize frame.
+pub async fn send_messages(
+    conn: &quinn::Connection,
+    msgs: &[Message],
+    config: &QuicAdapterConfig,
+) -> MqlResult<()> {
+    let count: u32 = msgs
+        .len()
+        .try_into()
+        .map_err(|_| MqlError::Quic(format!("batch too large: {} messages", msgs.len())))?;
+    let mut send = conn
+        .open_bi()
+        .await
+        .map_err(|e| MqlError::Quic(format!("open_bi failed: {e}")))?;
+    send
+        .0
+        .write_all(&count.to_be_bytes())
+        .await
+        .map_err(|e| MqlError::Quic(format!("write count failed: {e}")))?;
+    for msg in msgs {
+        let bytes = encode_frame(msg, config)?;
+        send.0
+            .write_all(&bytes)
+            .await
+            .map_err(|e| MqlError::Quic(format!("write failed: {e}")))?;
+    }
+    send
+        .0
+        .finish()
+        .map_err(|e| MqlError::Quic(format!("finish failed: {e}")))?;
+    Ok(())
+}
+
+/// Receive exactly one batch written by [`send_messages`]. Reads the count
+/// first, then that many frames — never preallocates by count (a corrupt
+/// prefix cannot force allocation; each frame is still size-bounded).
+///
+/// # Errors
+/// Accept/read/decode failures, oversize frames, or truncation mid-batch.
+pub async fn recv_messages(
+    conn: &quinn::Connection,
+    config: &QuicAdapterConfig,
+) -> MqlResult<Vec<Message>> {
+    let mut streams = conn
+        .accept_bi()
+        .await
+        .map_err(|e| MqlError::Quic(format!("accept_bi failed: {e}")))?;
+    let mut count_buf = [0u8; 4];
+    streams
+        .1
+        .read_exact(&mut count_buf)
+        .await
+        .map_err(|e| MqlError::Quic(format!("read count failed: {e}")))?;
+    let count = u32::from_be_bytes(count_buf);
+    let mut out = Vec::new();
+    for _ in 0..count {
+        let mut len_buf = [0u8; 4];
+        streams
+            .1
+            .read_exact(&mut len_buf)
+            .await
+            .map_err(|e| MqlError::Quic(format!("read length failed: {e}")))?;
+        let len = u32::from_be_bytes(len_buf) as usize;
+        if len > config.max_message_bytes {
+            return Err(MqlError::Quic(format!(
+                "frame length {len} B exceeds max {} B",
+                config.max_message_bytes
+            )));
+        }
+        let mut body = vec![0u8; len];
+        streams
+            .1
+            .read_exact(&mut body)
+            .await
+            .map_err(|e| MqlError::Quic(format!("read body failed: {e}")))?;
+        out.push(
+            serde_json::from_slice(&body)
+                .map_err(|e| MqlError::Quic(format!("json decode failed: {e}")))?,
+        );
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,11 +379,12 @@ mod tests {
         let _ = &mut stream;
     }
 
-    /// Loopback over real QUIC (ephemeral 127.0.0.1 ports, throwaway
-    /// self-signed cert): send → receive preserves the `Message` bit-for-bit
-    /// (invariant 12 across the socket layer, not just the codec).
-    #[tokio::test]
-    async fn loopback_send_recv_preserves_message() {
+    /// Loopback pair: bound server + client endpoint trusting the server's
+    /// throwaway self-signed cert. Returns `(server, client, server_addr)`.
+    /// Join (don't sequence) the connect/accept futures: under a
+    /// current-thread runtime the server future must be polled for its side
+    /// of the handshake to progress.
+    fn loopback_pair() -> (QuinnEndpoint, QuinnEndpoint, std::net::SocketAddr) {
         use std::sync::Arc;
 
         let certified = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
@@ -313,11 +404,17 @@ mod tests {
         let mut client_ep =
             QuinnEndpoint::bind("127.0.0.1:0".parse().unwrap(), None).unwrap();
         client_ep.set_default_client_config(client_config);
+        (server, client_ep, server_addr)
+    }
 
+    /// Loopback over real QUIC (ephemeral 127.0.0.1 ports, throwaway
+    /// self-signed cert): send → receive preserves the `Message` bit-for-bit
+    /// (invariant 12 across the socket layer, not just the codec).
+    #[tokio::test]
+    async fn loopback_send_recv_preserves_message() {
+        let (server, client_ep, server_addr) = loopback_pair();
         let cfg = QuicAdapterConfig::default();
         let expected = message();
-        // Join, don't sequence: under a current-thread runtime the server
-        // future must be polled for its side of the handshake to progress.
         let (conn_client, conn_server) = tokio::join!(
             client_ep.connect(server_addr, "localhost"),
             server.accept()
@@ -327,5 +424,39 @@ mod tests {
         send_message(&conn_client, &expected, &cfg).await.unwrap();
         let got = recv_message(&conn_server, &cfg).await.unwrap();
         assert_eq!(expected, got, "QUIC socket must preserve semantics (inv 12)");
+    }
+
+    /// Batch loopback: N messages over one stream arrive in order, plus the
+    /// empty batch edge case.
+    #[tokio::test]
+    async fn loopback_batch_preserves_order() {
+        let (server, client_ep, server_addr) = loopback_pair();
+        let cfg = QuicAdapterConfig::default();
+        let expected = vec![message(), message(), message(), message(), message()];
+        let (conn_client, conn_server) = tokio::join!(
+            client_ep.connect(server_addr, "localhost"),
+            server.accept()
+        );
+        let conn_client = conn_client.unwrap();
+        let conn_server = conn_server.unwrap();
+        let (send_res, got) = tokio::join!(
+            send_messages(&conn_client, &expected, &cfg),
+            recv_messages(&conn_server, &cfg)
+        );
+        send_res.unwrap();
+        assert_eq!(expected, got.unwrap(), "batch must preserve order and content");
+
+        let (conn_client2, conn_server2) = tokio::join!(
+            client_ep.connect(server_addr, "localhost"),
+            server.accept()
+        );
+        let conn_client2 = conn_client2.unwrap();
+        let conn_server2 = conn_server2.unwrap();
+        let (send_empty, got_empty) = tokio::join!(
+            send_messages(&conn_client2, &[], &cfg),
+            recv_messages(&conn_server2, &cfg)
+        );
+        send_empty.unwrap();
+        assert!(got_empty.unwrap().is_empty(), "empty batch round-trips");
     }
 }
