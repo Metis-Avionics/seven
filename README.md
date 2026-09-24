@@ -2,12 +2,45 @@
 
 Seven is an experimental distributed aviation-resilience research platform investigating whether an independent, decentralised network can preserve a degraded but useful representation of aviation state when conventional ATC communications or supporting infrastructure become unavailable or severely degraded.
 
+Research objective
+
+Seven investigates the engineering feasibility of an independent, decentralised backup network for aviation resilience.
+
+The system is designed around a failure regime in which conventional ATC communications or supporting infrastructure are degraded, partitioned, delayed, or unavailable. Rather than attempting to reproduce the capability or authority of the primary ATC system, Seven studies whether independently operating nodes can continue to maintain and exchange a degraded, provenance-aware probabilistic representation of physical state under those conditions.
+
+The central research question is:
+
+«When primary aviation infrastructure degrades, how much trustworthy shared state can an independent network preserve, and how does that state degrade as communications, evidence, and node availability deteriorate?»
+
+Seven therefore treats degraded operation as a measurable systems problem. Loss, duplication, reordering, delay, partition, conflicting observations, uncertainty, and node isolation are explicit research conditions rather than exceptional cases.
+
+The intended property is graceful degradation of information, not preservation of normal ATC capability.
+```
+Primary aviation infrastructure
+              │
+              │ degradation / loss
+              ▼
+      Independent Seven network
+              │
+       ┌──────┴──────┐
+       │             │
+   observations   provenance
+       │             │
+       └──────┬──────┘
+              ▼
+       probabilistic state
+              │
+              ▼
+      degraded shared state
+```
+Seven is consequently a research platform for studying aviation resilience, not an alternative ATC system. Its experimental state is intentionally non-authoritative and remains outside the operational safety chain.
+
 The research premise is not that a backup network can reproduce the safety or capacity of the primary ATC system. Rather, Seven explores whether independently operating nodes can maintain some degree of shared, provenance-aware situational state under degraded communications, providing a foundation for studying graceful degradation and resilience in aviation systems.
 
 Seven models physical observations as deterministic, provenance-aware probabilistic state and distributes that state across independently operating nodes while explicitly modelling communications failure modes including loss, partition, delay, duplication, and reordering.
 
 The intended research architecture is therefore:
-
+```
               PRIMARY ATC / AVIATION INFRASTRUCTURE
                          │
                   degradation/failure
@@ -23,7 +56,7 @@ The intended research architecture is therefore:
                          │
                          ↓
              degraded resilience layer
-
+```
 Seven is specifically concerned with the failure regime between normal operation and complete loss of useful information. The objective is to quantify what information can remain trustworthy, how uncertainty evolves, and how independently maintained state behaves when network conditions deteriorate.
 
 > Safety boundary (spec §21). Seven is a research platform. It must never
