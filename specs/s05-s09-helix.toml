@@ -12,9 +12,16 @@ endpoint_env = "SEVEN_HELIX_URL (default http://127.0.0.1:6969 per helix.toml [l
 
 [graph]
 nodes = ["Node", "Evidence", "Source", "Belief"]
-edges = ["FORWARDED_TO", "DERIVED_FROM", "PARENT_OF", "SUPPORTS"]
+# PRODUCED (Source → Evidence) written since v0.1 by write_evidence; the rest
+# landed post-v0.1 (see VERIFICATION.md invariant-15 row).
+edges = ["PRODUCED", "FORWARDED_TO", "DERIVED_FROM", "PARENT_OF", "SUPPORTS"]
 
 [required_operations]
+# Landed: write_provenance, write_belief_state (+reads), read_subject_history,
+# reconstruct_provenance, read_derived, read_provenance, read_belief.
+# write_observation is satisfied by write_evidence (origin write).
+# write_evidence_relation is satisfied by write_parentage (both directions).
+# Remaining: recover_after_restart (needs persistent storage story; memory wipes).
 list = ["write_observation", "write_provenance", "write_evidence_relation", "write_belief_state", "read_subject_history", "reconstruct_provenance", "recover_after_restart"]
 
 [invariant]

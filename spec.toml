@@ -55,4 +55,17 @@ done = [
   "simulated_transport_fault_injection",
   "property_invariant_tests",
 ]
-deferred = ["quic_adapter", "lora_adapter", "rf_physical_harness"]   # Phase 8–9 per §22 ordering
+# Post-v0.1, landed and live/loopback-verified (see specs/VERIFICATION.md):
+landed_post_v0_1 = [
+  "ekf_wiring",
+  "conflict_flagging",
+  "quic_framing",
+  "quic_sockets_loopback",
+  "quic_batch_messaging",
+  "lora_framing",
+  "graph_lineage_provenance_belief",
+  "reorder_stage",
+  "expires_at_roundtrip",
+  "source_id_roundtrip",
+]
+deferred = ["quic_deployment_tls", "quic_congestion_tuning", "lora_radio_driver", "rf_physical_harness", "recover_after_restart"]   # Phase 8–9 remainder per §22 ordering

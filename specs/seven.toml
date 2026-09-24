@@ -73,4 +73,7 @@ items = [
 
 [phases]
 # This pass implements phases 0–7. QUIC/LoRa/RF-harness are spec-planned as 8–9.
-deferred = ["quic_adapter", "lora_adapter", "rf_physical_harness"]
+# Landed since v0.1 (loopback/live-verified, see VERIFICATION.md Phase 8 table):
+landed = ["quic_framing", "quic_sockets_loopback", "quic_batch_messaging", "lora_framing", "ekf_wiring", "conflict_flagging", "graph_lineage_provenance_belief"]
+# Genuinely remaining Phase 8–9 work:
+deferred = ["quic_deployment_tls", "quic_congestion_tuning", "lora_radio_driver", "rf_physical_harness", "recover_after_restart"]
