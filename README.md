@@ -26,10 +26,10 @@ The intended research architecture is therefore:
 
 Seven is specifically concerned with the failure regime between normal operation and complete loss of useful information. The objective is to quantify what information can remain trustworthy, how uncertainty evolves, and how independently maintained state behaves when network conditions deteriorate.
 
-«Safety boundary (spec §21). Seven is a research platform. It must never
+> Safety boundary (spec §21). Seven is a research platform. It must never
 issue ATC clearances, command aircraft, provide separation assurance,
 autonomously direct aircraft, claim certification, or present experimental
-state as authoritative aviation state.»
+state as authoritative aviation state.
 
 Seven therefore does not attempt to replace ATC, become an operational ATC system, or establish an alternative source of authoritative aviation state. Its purpose is to provide an experimental environment for studying the engineering properties of an independent, decentralised resilience mechanism operating beneath degraded conditions.
 
