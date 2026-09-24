@@ -2,7 +2,7 @@
 
 Seven is an experimental distributed aviation-resilience research platform investigating whether an independent, decentralised network can preserve a degraded but useful representation of aviation state when conventional ATC communications or supporting infrastructure become unavailable or severely degraded.
 
-Research objective
+## Research objective
 
 Seven investigates the engineering feasibility of an independent, decentralised backup network for aviation resilience.
 
