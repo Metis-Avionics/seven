@@ -152,9 +152,9 @@ impl QuinnEndpoint {
 }
 
 /// Load a QUIC server config from operator-provisioned PEM files (cert chain
-/// + exactly one private key). Seven never mints deployment credentials —
-/// this only loads what the operator provisions (PEM paths are deployment
-/// configuration, like the TLS material itself).
+/// + exactly one private key). Seven never mints deployment credentials.
+/// This only loads what the operator provisions: PEM paths are deployment
+/// configuration, like the TLS material itself.
 ///
 /// # Errors
 /// Missing/unreadable files, unparseable PEM, empty chain, or missing key.
