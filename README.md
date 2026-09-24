@@ -34,7 +34,7 @@ state as authoritative aviation state.
 Seven therefore does not attempt to replace ATC, become an operational ATC system, or establish an alternative source of authoritative aviation state. Its purpose is to provide an experimental environment for studying the engineering properties of an independent, decentralised resilience mechanism operating beneath degraded conditions.
 
 Architecture
-
+```
 Seven composes existing Mētis primitives rather than recreating them:
 
 Physical observation
@@ -53,9 +53,10 @@ Transport adapters
         ├── QUIC           (Phase 8)
         ├── LoRa           (Phase 8)
         └── Lossy simulated ← seven-sim      (S13/S17)
-
+```
 Orthogonal substrates:
-
+```
 Seven state
     ├── theSix policy/cache substrate  ← seven-six   (S07)
     └── HelixDB persistent graph       ← seven-helix (S05/S09)
+```
