@@ -3,21 +3,24 @@
 
 [handover]
 status = "implementation"
-phase = "v0_1_deterministic_core_complete"
-last_updated = "2026-09-23T21:18:00+01:00"
+phase = "phase_8_core_complete"
+last_updated = "2026-09-24T08:20:00+01:00"
 
-summary = """Spec-driven v0.1 core complete and committed (single commit bd7624b).
-Workspace: 8 domain crates + seven-bin. 40/40 nextest green, clippy
---all-targets -D warnings silent, release build green. HelixDB evidence graph
-verified live against podman dev instance. Composition rule honored: theMQL,
-theSix, prv, HelixDB consumed as published crates, never reimplemented.
+summary = """Phase 8 core complete over 9 commits on top of v0.1 (pushed to
+origin/main). Workspace: 8 domain crates + seven-bin. 68/68 nextest green,
+clippy --all-targets -D warnings silent, live HelixDB suite 4/4 on podman
+dev, seven-bin demo green. EKF wired into belief, QUIC framing + sockets +
+batch + PEM operator TLS loopback-verified, LoRa compact framing inside the
+200 B budget, graph lineage/provenance/belief persistence live-verified,
+conflict flagging on both belief paths (decision 0004), S06 projection
+preserves authentication. Composition rule honored throughout.
 """
 
 remaining = [
-  "Phase 8: QUIC transport adapter (requires transport-neutral message model — done)",
-  "Phase 8: LoRa adapter with real Meshtastic payload-budget tests (inspect, don't guess)",
+  "QUIC deployment TLS config + congestion tuning (sockets loopback-verified; operator material pending)",
+  "LoRa radio driver (framing codec + budget landed; needs hardware)",
   "Phase 9: RF physical test harness (distinguish physical vs simulated measurements)",
-  "Publish seven-* crates to crates.io (metadata + READMEs landed this pass)",
+  "recover_after_restart (blocked: memory storage wipes on stop; needs --storage-uri backend)",
 ]
 
 decisions = [
@@ -30,6 +33,12 @@ decisions = [
   { id = "D7", description = "tokio pinned =1.52.4 (1.53.1 fails internally on rustc 1.98.1)", timestamp = "2026-09-23T21:18:00+01:00" },
   { id = "D8", description = "HelixDB dev instance uses memory storage under podman (CLI-managed MinIO short-name fails rootless); disk persistence via --storage-uri for real deployments", timestamp = "2026-09-23T21:18:00+01:00" },
   { id = "D9", description = "HelixDB endpoint defaults to IPv4 127.0.0.1:6969 — podman pasta forwarding is v4-only", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "D10", description = "Conflict criterion: 3-sigma vs predictive variance, both belief paths (decision 0004, CONFLICT_SIGMA = 3.0)", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "D11", description = "S15 reading: observation_id + provenance order is the sequence; expiry stays outside identity (decision 0005)", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "D12", description = "QUIC envelope is JSON (Message metadata is serde_json::Value, postcard cannot represent it); canonical bytes inside stay postcard", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "D13", description = "LoRa compact binary frame (187 B typical, ≤200 B budget); provenance summarizes to hop count, full chain via HelixDB", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "D14", description = "S06 subject grammar aligned to spec seven.<domain>.<subject_id>.evidence; SEVEN_DOMAIN = aviation", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "D15", description = "quinn 0.11 + rustls-ring resolves against pinned tokio 1.52.4 (single tokio); TLS identity caller-supplied, rcgen dev-only", timestamp = "2026-09-24T08:20:00+01:00" },
 ]
 
 completed = [
@@ -47,18 +56,28 @@ completed = [
   { id = "C12", description = "Codec bench: postcard 36B vs Borsh 88B (decision 0001 evidence)", timestamp = "2026-09-23T21:18:00+01:00" },
   { id = "C13", description = "specs/VERIFICATION.md maps all 17 spec-§22 invariants to named tests", timestamp = "2026-09-23T21:18:00+01:00" },
   { id = "C14", description = "Crate READMEs + publish metadata for all seven-* crates", timestamp = "2026-09-23T21:18:00+01:00" },
+  { id = "C15", description = "ImuFusedTrack composes themql-estimation Ekf (predict + GPS updates, deterministic)", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "C16", description = "QUIC framing codec ([len_be32][json]) + quinn sockets + count-prefixed batch + PEM operator TLS, loopback-verified", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "C17", description = "LoRa compact frame + fragmentation/reassembly + ≤200 B budget test; Meshtastic limits inspected, not guessed", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "C18", description = "HelixDB lineage: FORWARDED_TO/provenance, Belief+SUPPORTS, PARENT_OF+DERIVED_FROM — all live-verified; tautological assert fixed", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "C19", description = "Conflict flagging both belief paths (3-sigma, predictive variance) + deterministic/duplicate/agreement tests", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "C20", description = "S06 projection preserves auth (seven_source_id) + expires_at; seven-bin demo incorporates from transport", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "C21", description = "Sim reorder stage (reorder_in_place + send_stream) + replay fingerprint covers beliefs+db", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "C22", description = "68/68 nextest green, clippy -D warnings silent, live Helix 4/4; VERIFICATION.md maps all invariants + Phase 8", timestamp = "2026-09-24T08:20:00+01:00" },
+  { id = "C23", description = "Decisions 0004 (conflict criterion) and 0005 (S15 reading) recorded and implemented; specs de-staled (sourcing, phases, edges)", timestamp = "2026-09-24T08:20:00+01:00" },
 ]
 
 [handover.next_agent]
-focus = "Phase 8 transports: QUIC and LoRa adapters once the deterministic core above is the stable base."
+focus = "Phase 8 remainder: QUIC deployment TLS + congestion tuning, LoRa radio driver; then Phase 9 RF harness and restart-recovery storage story."
 tasks = [
-  "Inspect real Meshtastic payload limits before writing the LoRa adapter",
-  "Wire themql-estimation EKF into seven-belief for IMU-fused tracks",
+  "Provision operator TLS material and deployment QUIC config (sockets are loopback-verified)",
+  "Source LoRa hardware for the radio driver (framing codec + budget are landed)",
+  "Stand up a --storage-uri backend so recover_after_restart becomes testable",
   "Run `prv-cli living update` after any spec change",
 ]
 
 [session]
-start = "2026-09-23T20:00:00+01:00"
-end = "2026-09-23T21:18:00+01:00"
+start = "2026-09-24T08:00:00+01:00"
+end = "2026-09-24T08:20:00+01:00"
 agent = "opencode"
-type = "spec_driven_v0_1"
+type = "phase_8_core"
