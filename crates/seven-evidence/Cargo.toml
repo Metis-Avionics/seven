@@ -2,7 +2,9 @@
 name = "seven-evidence"
 version = "0.1.0"
 edition = "2024"
-description = "Seven Evidence (S03/S15): deterministic identity, provenance, authentication."
+license = "MIT"
+repository = "https://github.com/Metis-Avionics/seven"
+description = "Deterministic evidence identity, provenance, and authentication (Seven S03/S15)"
 
 [dependencies]
 seven-core.workspace = true

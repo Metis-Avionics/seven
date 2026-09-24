@@ -2,7 +2,9 @@
 name = "seven-mql"
 version = "0.1.0"
 edition = "2024"
-description = "Seven ⇄ theMQL projection (S06) + simulated lossy transport."
+license = "MIT"
+repository = "https://github.com/Metis-Avionics/seven"
+description = "Seven ⇄ theMQL projection and simulated transport (Seven S06)"
 
 [dependencies]
 seven-core.workspace = true
@@ -10,7 +12,6 @@ seven-evidence.workspace = true
 themql-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-postcard.workspace = true
 rand.workspace = true
 thiserror.workspace = true
 

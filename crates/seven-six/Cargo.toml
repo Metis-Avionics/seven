@@ -2,7 +2,9 @@
 name = "seven-six"
 version = "0.1.0"
 edition = "2024"
-description = "Seven theSix integration (S07): aviation cache policy only."
+license = "MIT"
+repository = "https://github.com/Metis-Avionics/seven"
+description = "Aviation cache policy layered over theSix (Seven S07)"
 
 [dependencies]
 seven-core.workspace = true

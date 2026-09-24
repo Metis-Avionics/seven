@@ -104,34 +104,229 @@ pub mod queries {
 
     /// Write parent lineage edges (S03 `parent_evidence_ids`).
     ///
-    /// Caller persists the child first; for each parent this issues one
-    /// `PARENT_OF` edge. Lineage reconstruction queries traverse these.
-    pub fn write_parentage(child: &EvidenceId) -> Vec<QueryRequest> {
-        // Edge target needs both node ids; we anchor parents by their stored
-        // evidence_id property — narrow, indexed anchor per the v3 SDK style.
-        // The parent hex list must come from Evidence at call time; this query
-        // takes them as parameters via `with_parameter_value`.
-        let child_hex = hex32(&child.0);
-        vec![QueryRequest::write(
-            write_batch()
+    /// Caller persists child and parents first (via [`write_evidence`]). For
+    /// each parent this issues one request writing both directions of the
+    /// lineage link: `PARENT_OF` (parent → child) and `DERIVED_FROM`
+    /// (child → parent). Both edge types are in the S05 schema; traversals
+    /// use whichever direction their start node requires.
+    pub fn write_parentage(child: &Evidence) -> Vec<QueryRequest> {
+        // Parents are anchored by their stored evidence_id property — narrow,
+        // indexed anchor per the v3 SDK style. Both ids are bound per request,
+        // so each request is self-sufficient (no caller-supplied params).
+        let child_hex = hex32(&child.evidence_id.0);
+        child
+            .parent_evidence_ids
+            .iter()
+            .map(|parent| {
+                let parent_hex = hex32(&parent.0);
+                QueryRequest::write(
+                    write_batch()
+                        .var_as(
+                            "child",
+                            g().n_with_label("Evidence")
+                                .where_(Predicate::eq_param("evidence_id", "child_id")),
+                        )
+                        .var_as(
+                            "parent",
+                            g().n_with_label("Evidence")
+                                .where_(Predicate::eq_param("evidence_id", "parent_id")),
+                        )
+                        .var_as(
+                            "edge",
+                            g().n(NodeRef::var("parent")).add_e(
+                                "PARENT_OF",
+                                NodeRef::var("child"),
+                                Vec::<(String, PropertyInput)>::new(),
+                            ),
+                        )
+                        .var_as(
+                            "derived",
+                            g().n(NodeRef::var("child")).add_e(
+                                "DERIVED_FROM",
+                                NodeRef::var("parent"),
+                                Vec::<(String, PropertyInput)>::new(),
+                            ),
+                        )
+                        .returning(["edge", "derived"]),
+                )
+                .with_parameter_value("child_id", helix_db::QueryValue::String(child_hex.clone()))
+                .with_parameter_value("parent_id", helix_db::QueryValue::String(parent_hex))
+            })
+            .collect()
+    }
+
+    /// Read what an evidence was derived from (S09 lineage recovery, forward
+    /// direction: child → parents via `DERIVED_FROM`).
+    pub fn read_derived() -> QueryRequest {
+        QueryRequest::read(
+            read_batch()
                 .var_as(
                     "child",
                     g().n_with_label("Evidence")
-                        .where_(Predicate::eq_param("evidence_id", "child_id")),
+                        .where_(Predicate::eq_param("evidence_id", "evidence_id")),
                 )
                 .var_as(
-                    "parent",
-                    g().n_with_label("Evidence")
-                        .where_(Predicate::eq_param("evidence_id", "parent_id")),
+                    "parents",
+                    g().n(NodeRef::var("child")).out(Some("DERIVED_FROM")).project(vec![
+                        PropertyProjection::new("evidence_id"),
+                        PropertyProjection::new("subject"),
+                    ]),
                 )
-                .var_as(
-                    "edge",
-                    g().n(NodeRef::var("parent"))
-                        .add_e("PARENT_OF", NodeRef::var("child"), Vec::<(String, PropertyInput)>::new()),
-                )
-                .returning(["edge"]),
+                .returning(["parents"]),
         )
-        .with_parameter_value("child_id", helix_db::QueryValue::String(child_hex))]
+        .with_query_name("read_derived")
+    }
+
+    /// Write provenance hops (S03 chain of custody → S05 graph).
+    ///
+    /// Caller persists the evidence first via [`write_evidence`]. For each hop
+    /// this writes one `Node` (custody event: `node_id` + `received_at_nanos`)
+    /// and one `FORWARDED_TO` edge from the evidence. One `Node` per hop
+    /// (not one per node id): re-relays by the same node are distinct custody
+    /// events and must not collapse — collapsing would silently discard
+    /// provenance (invariant 7).
+    pub fn write_provenance(e: &Evidence) -> Vec<QueryRequest> {
+        let ev_hex = hex32(&e.evidence_id.0);
+        e.provenance
+            .hops
+            .iter()
+            .map(|hop| {
+                QueryRequest::write(
+                    write_batch()
+                        .var_as(
+                            "leaf",
+                            g().n_with_label("Evidence")
+                                .where_(Predicate::eq_param("evidence_id", "evidence_id")),
+                        )
+                        .var_as(
+                            "relay",
+                            g().add_n(
+                                "Node",
+                                vec![
+                                    ("node_id", PropertyInput::Value(id_or(hop.node.0.clone()))),
+                                    (
+                                        "received_at_nanos",
+                                        PropertyInput::Value(PropertyValue::I64(hop.received_at_nanos)),
+                                    ),
+                                ],
+                            ),
+                        )
+                        .var_as(
+                            "fwd",
+                            g().n(NodeRef::var("leaf")).add_e(
+                                "FORWARDED_TO",
+                                NodeRef::var("relay"),
+                                vec![(
+                                    "received_at_nanos",
+                                    PropertyInput::Value(PropertyValue::I64(hop.received_at_nanos)),
+                                )],
+                            ),
+                        )
+                        .returning(["fwd"]),
+                )
+                .with_parameter_value("evidence_id", helix_db::QueryValue::String(ev_hex.clone()))
+            })
+            .collect()
+    }
+
+    /// Read the custody chain for one evidence id (S09 provenance recovery —
+    /// the documented recovery path for `LoRa`'s hop-count summary).
+    pub fn read_provenance() -> QueryRequest {
+        QueryRequest::read(
+            read_batch()
+                .var_as(
+                    "leaf",
+                    g().n_with_label("Evidence")
+                        .where_(Predicate::eq_param("evidence_id", "evidence_id")),
+                )
+                .var_as(
+                    "relays",
+                    g().n(NodeRef::var("leaf")).out(Some("FORWARDED_TO")).project(vec![
+                        PropertyProjection::new("node_id"),
+                        PropertyProjection::new("received_at_nanos"),
+                    ]),
+                )
+                .returning(["relays"]),
+        )
+        .with_query_name("read_provenance")
+    }
+
+    /// Write a belief snapshot for a subject (S05 `Belief` node).
+    ///
+    /// Direction is `(:Evidence)-[:SUPPORTS]->(:Belief)`: evidence supports
+    /// (never constitutes) belief — the engine remains the authority on how
+    /// posteriors are computed; the graph records what supported them.
+    /// Mean/variance store as native `F64Array`; no float-as-string hacks.
+    pub fn write_belief_state(
+        subject: &seven_core::SubjectId,
+        belief: &seven_belief::GaussianBelief,
+        supporting: &EvidenceId,
+    ) -> QueryRequest {
+        let sup_hex = hex32(&supporting.0);
+        QueryRequest::write(
+            write_batch()
+                .var_as(
+                    "ev",
+                    g().n_with_label("Evidence")
+                        .where_(Predicate::eq_param("evidence_id", "evidence_id")),
+                )
+                .var_as(
+                    "belief",
+                    g().add_n(
+                        "Belief",
+                        vec![
+                            ("subject", PropertyInput::Value(id_or(subject.0.clone()))),
+                            (
+                                "mean",
+                                PropertyInput::Value(PropertyValue::F64Array(belief.mean.to_vec())),
+                            ),
+                            (
+                                "var",
+                                PropertyInput::Value(PropertyValue::F64Array(belief.var.to_vec())),
+                            ),
+                            (
+                                "independent_updates",
+                                // Saturating: the counter cannot realistically
+                                // approach i64::MAX; wrap would corrupt history.
+                                PropertyInput::Value(PropertyValue::I64(
+                                    i64::try_from(belief.independent_updates)
+                                        .unwrap_or(i64::MAX),
+                                )),
+                            ),
+                        ],
+                    ),
+                )
+                .var_as(
+                    "sup",
+                    g().n(NodeRef::var("ev")).add_e(
+                        "SUPPORTS",
+                        NodeRef::var("belief"),
+                        Vec::<(String, PropertyInput)>::new(),
+                    ),
+                )
+                .returning(["belief"]),
+        )
+        .with_parameter_value("evidence_id", helix_db::QueryValue::String(sup_hex))
+    }
+
+    /// Read the latest belief snapshot for a subject (S09 belief recovery).
+    pub fn read_belief() -> QueryRequest {
+        QueryRequest::read(
+            read_batch()
+                .var_as(
+                    "belief",
+                    g().n_with_label("Belief")
+                        .where_(Predicate::eq_param("subject", "subject"))
+                        .project(vec![
+                            PropertyProjection::new("subject"),
+                            PropertyProjection::new("mean"),
+                            PropertyProjection::new("var"),
+                            PropertyProjection::new("independent_updates"),
+                        ]),
+                )
+                .returning(["belief"]),
+        )
+        .with_query_name("read_belief")
     }
 
     /// Read all evidence for a subject (S09 `read_subject_history`).
@@ -233,9 +428,14 @@ mod tests {
     /// The suite builds real v3 `QueryRequest`s; smoke-check serialization.
     #[test]
     fn query_suite_builds() {
-        let q = queries::read_subject_history();
-        let _ = q;
-        let p = queries::reconstruct_provenance();
-        let _ = p;
+        for query in [
+            queries::read_subject_history(),
+            queries::reconstruct_provenance(),
+            queries::read_provenance(),
+            queries::read_belief(),
+            queries::read_derived(),
+        ] {
+            let _ = query;
+        }
     }
 }

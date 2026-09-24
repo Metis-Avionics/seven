@@ -5,8 +5,8 @@ name = "belief"
 crate = "seven-belief"
 domain = "seven-owned (semantics) / themql-owned (estimator machinery)"
 
-[composition]  # S04/S08 — compose themql-estimation (vendored), do NOT reimplement.
-estimator_source = "vendor/theMQL/crates/themql-estimation (Ekf, Estimator, BayesianEstimator)"
+[composition]  # S04/S08 — compose themql-estimation (crates.io), do NOT reimplement.
+estimator_source = "themql-estimation 0.1 from crates.io (Ekf, Estimator, BayesianEstimator); see specs/decisions/0003-themql-sourcing.md (no vendor directory)"
 why = "safety-critical 21-dim EKF with quaternion attitude, stack SMatrix, explicit Q/R — prv's EKF derived from it. prs_core::State is economic-shaped and out of scope."
 seven_owns = ["evidence_gating", "duplicate_rejection_via_evidence_graph", "prior_selection", "likelihood_documentation", "conflict_retention", "belief_lineage"]
 
@@ -32,3 +32,9 @@ tolerance = "bitwise f64 is preferred; where reordering changes FP summation ord
 # independent position evidence. Determinism is the contract; the model is explicit.
 primary = "themql_estimation::Ekf for IMU-fused tracks"
 evidence_update = "linear Gaussian (deterministic) per independent evidence group"
+
+[conflict_criterion]  # decision specs/decisions/0004-conflict-criterion.md
+criterion = "3-sigma-vs-predictive-variance"
+constant = "CONFLICT_SIGMA = 3.0 (seven-belief; named, documented, tunable)"
+rule = "flag iff any dimension disagrees with the pre-update posterior mean by more than k*sqrt(var + R); first observation and duplicates never flag"
+scope = ["BeliefEngine::incorporate", "ImuFusedTrack::update_from_evidence (EKF position/velocity marginals, same sigma and likelihood)"]

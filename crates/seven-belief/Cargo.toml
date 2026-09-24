@@ -2,7 +2,9 @@
 name = "seven-belief"
 version = "0.1.0"
 edition = "2024"
-description = "Seven Bayesian belief engine (S04): composes themql-estimation, gates via evidence graph."
+license = "MIT"
+repository = "https://github.com/Metis-Avionics/seven"
+description = "Deterministic Bayesian belief engine (Seven S04)"
 
 [dependencies]
 seven-core.workspace = true

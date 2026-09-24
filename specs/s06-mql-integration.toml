@@ -6,7 +6,7 @@ crate = "seven-mql"
 domain = "seven-owned projection; themql-owned message model"
 
 [projection]  # transports are projections of Message; Seven maps, never competes.
-target = "themql_core::Message (vendored, 0.1.0)"
+target = "themql_core::Message (themql-core 0.1 from crates.io; see specs/decisions/0003-themql-sourcing.md)"
 payload_carriage = "Payload::Bytes(canonical_bytes, FormatTag::Postcard) — postcard is already a first-class theMQL format"
 provenance_carriage = "Metadata.extensions BTreeMap (deterministic order) + causation_id linking"
 subject_grammar = "seven.<domain>.<subject_id>.evidence"
@@ -16,7 +16,7 @@ no_sevenmessage_abstraction = true
 # themql's TransportKind is closed { Mqtt, Graphql, Sse }. Seven does NOT extend
 # it inside its own authority; QUIC/LoRa adapters project *to/from* Message and
 # remain Phase 8–9. Publishing themql-estimation/message from the owned repo is
-# the follow-up that lets Seven drop the vendor.
+# the follow-up that lets Seven drop the external sourcing.
 no_transportkind_extension = true
 simulated_transport = "in-memory lossy link with loss/dup/reorder injection (Phase 6)"
 

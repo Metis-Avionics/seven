@@ -190,10 +190,13 @@ impl ReplayEngine {
         }
     }
 
-    /// Fingerprint of the final state for determinism comparison.
+    /// Fingerprint of the final state for determinism comparison. Covers
+    /// messages, node liveness, the persistence overlay, AND belief tracks:
+    /// a replay that reproduces messages but diverges beliefs must NOT
+    /// compare equal (invariant 14 is about final *state*, not event count).
+    /// All maps iterate in `BTreeMap` order (deterministic).
     #[must_use]
     pub fn state_fingerprint(&self) -> [u8; 32] {
-        // Deterministic iteration over BTreeMap.
         let mut acc = Vec::new();
         for (k, v) in &self.seen_messages {
             acc.extend_from_slice(k.as_bytes());
@@ -202,6 +205,17 @@ impl ReplayEngine {
         for (k, on) in &self.nodes_online {
             acc.extend_from_slice(k.as_bytes());
             acc.push(u8::from(*on));
+        }
+        for (k, h) in &self.db {
+            acc.extend_from_slice(k.as_bytes());
+            acc.extend_from_slice(h);
+        }
+        for (subject, track) in &self.beliefs.tracks {
+            acc.extend_from_slice(subject.0.as_bytes());
+            for v in track.mean.iter().chain(track.var.iter()) {
+                acc.extend_from_slice(&v.to_bits().to_be_bytes());
+            }
+            acc.extend_from_slice(&track.independent_updates.to_be_bytes());
         }
         *blake3::hash(&acc).as_bytes()
     }
@@ -248,5 +262,52 @@ mod tests {
         log.push(SevenEvent::NodeOffline { node_id: "n1".into() });
         let h2 = log.stream_hash();
         assert_ne!(h1, h2, "adding an event changes the hash");
+    }
+
+    /// The fingerprint covers beliefs and db: engines differing only in
+    /// posterior (or stored hashes) must NOT compare equal. Otherwise
+    /// invariant 14 could pass while final states diverge.
+    #[test]
+    fn fingerprint_covers_beliefs_and_db() {
+        fn ev_at(pos: f64, t: i64) -> Evidence {
+            let state = CanonicalState::canonicalize(&PhysicalObservation {
+                position_m: [pos, 2.0, 3.0],
+                velocity_ms: [0.1, 0.2, 0.3],
+                attitude: Quaternion::identity(),
+                observed_at_nanos: t,
+            })
+            .unwrap();
+            Evidence::originate(
+                &SigningKey::from_bytes(&[7_u8; 32]),
+                SubjectId("ac".into()),
+                &state,
+                t,
+                i64::MAX,
+            )
+            .unwrap()
+        }
+        let mut log_a = EventLog::new(1);
+        let mut log_b = EventLog::new(1);
+        log_a.push(SevenEvent::Observation { evidence: Box::new(ev_at(1.0, 1)) });
+        log_b.push(SevenEvent::Observation { evidence: Box::new(ev_at(500.0, 1)) });
+        let a = ReplayEngine::replay(&log_a).unwrap();
+        let b = ReplayEngine::replay(&log_b).unwrap();
+        assert_ne!(
+            a.state_fingerprint(),
+            b.state_fingerprint(),
+            "different positions ⇒ different posteriors ⇒ different fingerprints"
+        );
+
+        let mut log_c = EventLog::new(1);
+        let mut log_d = EventLog::new(1);
+        log_c.push(SevenEvent::DbWrite { key: "k".into(), value_hash: [1; 32] });
+        log_d.push(SevenEvent::DbWrite { key: "k".into(), value_hash: [2; 32] });
+        let c = ReplayEngine::replay(&log_c).unwrap();
+        let d = ReplayEngine::replay(&log_d).unwrap();
+        assert_ne!(
+            c.state_fingerprint(),
+            d.state_fingerprint(),
+            "different stored hashes ⇒ different fingerprints"
+        );
     }
 }

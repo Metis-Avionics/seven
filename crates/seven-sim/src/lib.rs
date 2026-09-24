@@ -31,9 +31,6 @@ pub struct LossyChannel {
     seed: u64,
     loss_p: f64,
     dup_p: f64,
-    // Reorder is modeled at a stream level by seven-sim reorder_in_place;
-    // the per-message field is kept for the documented budget interface (S13).
-    #[allow(dead_code)]
     reorder_p: f64,
 }
 
@@ -74,6 +71,53 @@ impl LossyChannel {
         }
 
         vec![msg]
+    }
+
+    /// Send a whole stream through the channel (S13 combined fault profile).
+    /// Per-message loss/dup run via [`send`] (sequence numbers `seq_base + i`),
+    /// then — with probability `reorder_p`, drawn deterministically from the
+    /// stream seed — arrivals are shuffled via [`reorder_in_place`], logging
+    /// `TransportReorder` events. Fully deterministic per `(seed, seq_base)`,
+    /// so replay stays exact. An empty stream short-circuits (no events).
+    pub fn send_stream(
+        &self,
+        msgs: Vec<SevenMessage>,
+        log: &mut EventLog,
+        seq_base: u64,
+    ) -> Vec<SevenMessage> {
+        let mut arrivals: Vec<SevenMessage> = msgs
+            .into_iter()
+            .enumerate()
+            .flat_map(|(i, m)| self.send(m, log, seq_base + i as u64))
+            .collect();
+        if arrivals.len() > 1 {
+            let mut rng = StdRng::seed_from_u64(self.seed ^ seq_base ^ 0x0052_454f_5244_4552);
+            if rng.random_range(0.0..1.0) < self.reorder_p {
+                reorder_in_place(self.seed ^ seq_base, log, &mut arrivals);
+            }
+        }
+        arrivals
+    }
+}
+
+/// Deterministically reorder a stream of messages (seeded Fisher–Yates).
+/// Every swap is logged as a `TransportReorder` event (S17 observable, never
+/// swallowed). This is the stream-level reorder stage the per-message
+/// [`LossyChannel`] defers to: collect arrivals, then call this before
+/// delivery. Same seed ⇒ same permutation, so replay stays exact.
+///
+/// Indices in the logged events are stream positions at swap time.
+pub fn reorder_in_place(seed: u64, log: &mut EventLog, stream: &mut [SevenMessage]) {
+    let mut rng = StdRng::seed_from_u64(seed);
+    for i in (1..stream.len()).rev() {
+        let j = rng.random_range(0..=i);
+        if i != j {
+            stream.swap(i, j);
+            log.push(SevenEvent::TransportReorder {
+                from_index: i as u64,
+                to_index: j as u64,
+            });
+        }
     }
 }
 
@@ -191,5 +235,117 @@ mod tests {
             LossyChannel::new(1, 1.5, 0.0, 0.0, &mut log),
             Err(SimError::InvalidProbability(_))
         ));
+    }
+
+    fn message(id: &str) -> SevenMessage {
+        SevenMessage {
+            id: id.into(),
+            from: "a".into(),
+            to: "b".into(),
+            canonical_payload: vec![],
+            sent_at_nanos: 0,
+        }
+    }
+
+    /// Reorder is deterministic per seed and lossless (a permutation).
+    #[test]
+    fn reorder_deterministic_per_seed() {
+        let mk = || (0..10).map(|i| message(&format!("m{i}"))).collect::<Vec<_>>();
+        let mut log_a = EventLog::new(1);
+        let mut first = mk();
+        reorder_in_place(7, &mut log_a, &mut first);
+        let mut log_b = EventLog::new(1);
+        let mut second = mk();
+        reorder_in_place(7, &mut log_b, &mut second);
+        assert_eq!(first, second, "same seed ⇒ same permutation");
+        let mut ids: Vec<_> = first.iter().map(|m| m.id.clone()).collect();
+        ids.sort();
+        assert_eq!(
+            ids,
+            (0..10).map(|i| format!("m{i}")).collect::<Vec<_>>(),
+            "reorder is a permutation: nothing lost or duplicated"
+        );
+    }
+
+    /// Swaps are observable: every reorder logs a `TransportReorder` event,
+    /// and an empty/singleton stream logs nothing and is untouched.
+    #[test]
+    fn reorder_events_observable() {
+        let mut log = EventLog::new(2);
+        let mut empty: Vec<SevenMessage> = Vec::new();
+        reorder_in_place(2, &mut log, &mut empty);
+        let mut one = vec![message("solo")];
+        reorder_in_place(2, &mut log, &mut one);
+        assert!(log.events.is_empty());
+        assert_eq!(one, vec![message("solo")]);
+
+        let mut stream: Vec<SevenMessage> = (0..20).map(|i| message(&format!("m{i}"))).collect();
+        reorder_in_place(99, &mut log, &mut stream);
+        assert!(
+            log.events
+                .iter()
+                .all(|e| matches!(e, SevenEvent::TransportReorder { .. })),
+            "every logged event is a reorder"
+        );
+    }
+
+    fn stream(n: usize) -> Vec<SevenMessage> {
+        (0..n).map(|i| message(&format!("m{i}"))).collect()
+    }
+
+    /// `send_stream` with all faults off is the identity (and logs nothing).
+    #[test]
+    fn send_stream_no_faults_is_identity() {
+        let mut log = EventLog::new(3);
+        let chan = LossyChannel::new(3, 0.0, 0.0, 0.0, &mut log).unwrap();
+        let mut log2 = EventLog::new(3);
+        let got = chan.send_stream(stream(8), &mut log2, 0);
+        assert_eq!(got, stream(8));
+        assert!(log2.events.is_empty());
+    }
+
+    /// `send_stream` is deterministic per `(seed, seq_base)` and conserves
+    /// messages modulo loss/dup: every arrival is an original (no corruption,
+    /// invariant 16 at stream level).
+    #[test]
+    fn send_stream_deterministic_and_conserving() {
+        let run = |seed: u64, base: u64| {
+            let mut log = EventLog::new(seed);
+            let chan = LossyChannel::new(seed, 0.4, 0.4, 1.0, &mut log).unwrap();
+            (chan.send_stream(stream(12), &mut log, base), log)
+        };
+        let (first, log_a) = run(11, 0);
+        let (second, log_b) = run(11, 0);
+        assert_eq!(first, second, "same seed + base ⇒ same stream");
+        assert_eq!(log_a.events, log_b.events, "same fault log");
+        for m in &first {
+            assert!(
+                (0..12).any(|i| m.id == format!("m{i}")),
+                "arrival {} is an original message",
+                m.id
+            );
+        }
+    }
+
+    /// `reorder_p = 1` forces the shuffle stage (reorder events logged);
+    /// `reorder_p = 0` never shuffles even over a long stream.
+    #[test]
+    fn send_stream_reorder_probability_gates_shuffle() {
+        let mut log_on = EventLog::new(5);
+        let chan_on = LossyChannel::new(5, 0.0, 0.0, 1.0, &mut log_on).unwrap();
+        let mut log_on2 = EventLog::new(5);
+        let got = chan_on.send_stream(stream(30), &mut log_on2, 0);
+        assert_eq!(got.len(), 30, "no loss/dup: pure reorder stage");
+        assert!(
+            log_on2.events.iter().any(|e| matches!(e, SevenEvent::TransportReorder { .. })),
+            "forced shuffle must log reorder events"
+        );
+
+        let mut log_off = EventLog::new(5);
+        let chan_off = LossyChannel::new(5, 0.0, 0.0, 0.0, &mut log_off).unwrap();
+        let mut log_off2 = EventLog::new(5);
+        let same = chan_off.send_stream(stream(30), &mut log_off2, 0);
+        assert_eq!(same, stream(30), "reorder_p = 0 ⇒ order preserved");
+        assert!(log_off2.events.is_empty());
     }
 }

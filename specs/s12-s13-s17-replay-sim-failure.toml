@@ -13,7 +13,7 @@ role = "validation mechanism, not debugging convenience"
 
 [simulation]  # S13
 parameters = ["sensor_noise", "packet_loss", "latency", "duplication", "reordering", "clock_skew", "node_failure", "network_partition", "conflicting_observations"]
-# prv-monte-carlo is a git dep, but its State is economic-shaped; Seven's sim
+# prv-monte-carlo is a crates.io dep (0.2.1), but its State is economic-shaped;
 # uses seeded rand + seven-own state. Decision record specs/decisions/0002 records
 # the audit finding (prv_monte_carlo::Simulator is generic over nothing — it
 # requires prv_core::State, violating S08 composition for aviation). Dep kept

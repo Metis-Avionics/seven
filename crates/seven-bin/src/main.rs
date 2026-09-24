@@ -7,7 +7,7 @@
 use seven_belief::BeliefEngine;
 use seven_core::{CanonicalState, PhysicalObservation, Quaternion, SubjectId};
 use seven_evidence::Evidence;
-use seven_mql::{LossyMql, to_message};
+use seven_mql::{LossyMql, SEVEN_DOMAIN, to_message};
 use ed25519_dalek::SigningKey;
 
 fn main() {
@@ -26,7 +26,7 @@ fn main() {
         let state = CanonicalState::canonicalize(&raw).expect("valid");
         let evidence = Evidence::originate(&key, subject.clone(), &state, t * 1_000, i64::MAX)
             .expect("evidence constructs");
-        let msg = to_message(&evidence).expect("projection");
+        let msg = to_message(&evidence, SEVEN_DOMAIN).expect("projection");
         for arrived in link.deliver(msg, t as u64) {
             drop(arrived); // transport layer hands to domain
             let included = engine.incorporate(&evidence).expect("verified");

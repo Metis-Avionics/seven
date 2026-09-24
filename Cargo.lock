@@ -2355,6 +2355,8 @@ dependencies = [
  "helix-db",
  "proptest",
  "serde",
+ "serde_json",
+ "seven-belief",
  "seven-core",
  "seven-evidence",
  "thiserror",
@@ -2366,7 +2368,6 @@ name = "seven-mql"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
- "postcard",
  "proptest",
  "rand 0.10.3",
  "serde",
