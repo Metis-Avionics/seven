@@ -1,7 +1,8 @@
-# Decision 0005 — S15 replay-resistance reading (PROPOSED)
+# Decision 0005 — S15 replay-resistance reading (DECIDED)
 
-**Status**: proposed 2026-09-24. Awaiting adjudication — spec clarification
-only; explicitly NO code or schema change proposed. See invariant 9
+**Status**: decided 2026-09-24. Wording applied to `specs/s03-evidence.toml`
+(`replay_resistance` + negative constraint as comments). No code, test, or
+schema change — as proposed. See invariant 9
 (duplicates), invariant 10 (stale), invariant 6 (forwarding).
 
 **Question**: `specs/s03-evidence.toml` (S15) states replay resistance comes

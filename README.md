@@ -62,7 +62,7 @@ All dependencies come from crates.io (`themql-core/-estimation 0.1`,
 ## Verification
 
 ```bash
-cargo nextest run --workspace --no-fail-fast          # 67 tests
+cargo nextest run --workspace --no-fail-fast          # 68 tests
 cargo clippy --workspace --all-targets -- -D warnings  # clean
 SEVEN_HELIX_LIVE=1 cargo nextest run -p seven-helix    # live podman dev
 ```

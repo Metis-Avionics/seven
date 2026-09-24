@@ -151,10 +151,45 @@ impl QuinnEndpoint {
     }
 }
 
+/// Load a QUIC server config from operator-provisioned PEM files (cert chain
+/// + exactly one private key). Seven never mints deployment credentials —
+/// this only loads what the operator provisions (PEM paths are deployment
+/// configuration, like the TLS material itself).
+///
+/// # Errors
+/// Missing/unreadable files, unparseable PEM, empty chain, or missing key.
+pub fn load_server_config_from_pem(
+    cert_chain_path: &std::path::Path,
+    private_key_path: &std::path::Path,
+) -> MqlResult<quinn::ServerConfig> {
+    use std::io::BufReader;
+
+    let cert_file = std::fs::File::open(cert_chain_path)
+        .map_err(|e| MqlError::Quic(format!("open {} failed: {e}", cert_chain_path.display())))?;
+    let certs: Vec<_> = rustls_pemfile::certs(&mut BufReader::new(cert_file))
+        .collect::<Result<_, _>>()
+        .map_err(|e| MqlError::Quic(format!("parse {} failed: {e}", cert_chain_path.display())))?;
+    if certs.is_empty() {
+        return Err(MqlError::Quic(format!(
+            "no certificates in {}",
+            cert_chain_path.display()
+        )));
+    }
+    let key_file = std::fs::File::open(private_key_path).map_err(|e| {
+        MqlError::Quic(format!("open {} failed: {e}", private_key_path.display()))
+    })?;
+    let key = rustls_pemfile::private_key(&mut BufReader::new(key_file))
+        .map_err(|e| MqlError::Quic(format!("parse {} failed: {e}", private_key_path.display())))?
+        .ok_or_else(|| {
+            MqlError::Quic(format!("no private key in {}", private_key_path.display()))
+        })?;
+    quinn::ServerConfig::with_single_cert(certs, key)
+        .map_err(|e| MqlError::Quic(format!("server config failed: {e}")))
+}
+
 /// Send one framed `Message` over a fresh bidirectional stream, then
 /// gracefully finish the send side. One message per stream keeps framing
-/// trivially parseable and matches the `keep_stream_open = false` profile;
-/// stream reuse is future work, not a semantic change.
+/// trivially parseable; batching via [`send_messages`] reuses one stream.
 ///
 /// # Errors
 /// Stream open/write/finish failures, or oversize messages.
@@ -429,8 +464,7 @@ mod tests {
     /// Batch loopback: N messages over one stream arrive in order, plus the
     /// empty batch edge case.
     #[tokio::test]
-    async fn loopback_batch_preserves_order() {
-        let (server, client_ep, server_addr) = loopback_pair();
+    async fn loopback_batch_preserves_order() {        let (server, client_ep, server_addr) = loopback_pair();
         let cfg = QuicAdapterConfig::default();
         let expected = vec![message(), message(), message(), message(), message()];
         let (conn_client, conn_server) = tokio::join!(
@@ -458,5 +492,74 @@ mod tests {
         );
         send_empty.unwrap();
         assert!(got_empty.unwrap().is_empty(), "empty batch round-trips");
+    }
+
+    /// Operator TLS path: a self-signed cert written as PEM files loads back
+    /// into a working server config (loopback handshake succeeds), and every
+    /// failure mode (missing file, empty chain, keyless file) is explicit.
+    #[tokio::test]
+    async fn pem_server_config_loads_and_serves() {
+        use std::io::Write as _;
+
+        let dir = std::env::temp_dir().join(format!(
+            "seven-quic-pem-test-{}-{}",
+            std::process::id(),
+            "loads-and-serves"
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let cert_path = dir.join("chain.pem");
+        let key_path = dir.join("key.pem");
+
+        let certified = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+        std::fs::File::create(&cert_path)
+            .unwrap()
+            .write_all(certified.cert.pem().as_bytes())
+            .unwrap();
+        std::fs::File::create(&key_path)
+            .unwrap()
+            .write_all(certified.signing_key.serialize_pem().as_bytes())
+            .unwrap();
+
+        let server_config = load_server_config_from_pem(&cert_path, &key_path).unwrap();
+        let mut roots = quinn::rustls::RootCertStore::empty();
+        roots.add(certified.cert.der().clone()).unwrap();
+        let client_config =
+            quinn::ClientConfig::with_root_certificates(std::sync::Arc::new(roots)).unwrap();
+
+        let server =
+            QuinnEndpoint::bind("127.0.0.1:0".parse().unwrap(), Some(server_config)).unwrap();
+        let server_addr = server.local_addr().unwrap();
+        let mut client_ep =
+            QuinnEndpoint::bind("127.0.0.1:0".parse().unwrap(), None).unwrap();
+        client_ep.set_default_client_config(client_config);
+        let cfg = QuicAdapterConfig::default();
+        let expected = message();
+        let (conn_client, conn_server) = tokio::join!(
+            client_ep.connect(server_addr, "localhost"),
+            server.accept()
+        );
+        // Bind (don't inline `.unwrap()` by reference): dropping the last
+        // Connection handle closes the connection, racing the server read.
+        let conn_client = conn_client.unwrap();
+        let conn_server = conn_server.unwrap();
+        send_message(&conn_client, &expected, &cfg).await.unwrap();
+        let got = recv_message(&conn_server, &cfg).await.unwrap();
+        assert_eq!(expected, got, "PEM-loaded config must serve QUIC");
+
+        assert!(matches!(
+            load_server_config_from_pem(&dir.join("missing.pem"), &key_path),
+            Err(MqlError::Quic(_))
+        ));
+        let empty_path = dir.join("empty.pem");
+        std::fs::File::create(&empty_path).unwrap();
+        assert!(matches!(
+            load_server_config_from_pem(&empty_path, &key_path),
+            Err(MqlError::Quic(_))
+        ));
+        assert!(matches!(
+            load_server_config_from_pem(&cert_path, &cert_path),
+            Err(MqlError::Quic(_))
+        ));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

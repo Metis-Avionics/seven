@@ -37,7 +37,11 @@ duplicate_not_independent = true
 signature = "ed25519-dalek (established crate)"
 integrity = "blake3 hash over canonical bytes"
 provenance = "explicit chain; not implied by signature"
-replay_resistance = "observed_at + expires_at + sequence carried canonically"
+replay_resistance = "observed_at (canonical) + expires_at (carried, never hashed) + observation_id dedup + provenance order; see decision 0005"
+# 0005: "sequence" means observation_id + provenance chain (no counter field;
+# partitioned observers cannot coordinate one). expires_at MUST stay outside
+# identity: hashing it would fork ids on re-issue (breaks invariant 6) and
+# conflate freshness with identity (forbidden by invariant 10).
 never_invent_crypto = true
 
 [time]  # §11 — never collapse these.
