@@ -10,7 +10,7 @@ The system is designed around a failure regime in which conventional ATC communi
 
 The central research question is:
 
-«When primary aviation infrastructure degrades, how much trustworthy shared state can an independent network preserve, and how does that state degrade as communications, evidence, and node availability deteriorate?»
+> When primary aviation infrastructure degrades, how much trustworthy shared state can an independent network preserve, and how does that state degrade as communications, evidence, and node availability deteriorate?
 
 Seven therefore treats degraded operation as a measurable systems problem. Loss, duplication, reordering, delay, partition, conflicting observations, uncertainty, and node isolation are explicit research conditions rather than exceptional cases.
 
