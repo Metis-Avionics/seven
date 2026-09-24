@@ -10,11 +10,14 @@
 //! The canonical evidence bytes *inside* the message remain postcard (decision
 //! 0001); only the envelope is JSON.
 //!
-//! QUIC socket wiring itself (quinn, TLS, congestion) is the next step after
-//! this codec lands; this module pins the framing contract so socket work
-//! cannot silently change semantics (invariant 12: decode(encode(m)) == m).
+//! The socket layer below the framing (`QuinnEndpoint`, `send_message`,
+//! `recv_message`) runs framed messages over QUIC bidirectional streams.
+//! TLS identity is caller-supplied (`quinn::ServerConfig` / client config):
+//! Seven never mints deployment credentials — tests mint throwaway
+//! self-signed certs via `rcgen` (dev-dependency, never a runtime dep).
 
 use crate::{MqlError, MqlResult};
+use std::net::SocketAddr;
 use themql_core::Message;
 
 /// Maximum framed `Message` size accepted on decode (8 MiB). QUIC has no `LoRa`
@@ -76,6 +79,138 @@ pub fn decode_frame(buf: &[u8], config: &QuicAdapterConfig) -> MqlResult<Option<
     let msg: Message = serde_json::from_slice(&buf[4..4 + len])
         .map_err(|e| MqlError::Quic(format!("json decode failed: {e}")))?;
     Ok(Some((msg, 4 + len)))
+}
+
+// ===========================================================================
+// Socket layer — framed Messages over QUIC bidirectional streams (quinn)
+// ===========================================================================
+
+/// A bound QUIC endpoint. Created with caller-supplied TLS identity for
+/// serving, or without for client-only use.
+pub struct QuinnEndpoint {
+    inner: quinn::Endpoint,
+}
+
+impl QuinnEndpoint {
+    /// Bind `addr` (use port 0 for an ephemeral loopback port). `server`
+    /// enables accepting inbound connections; `None` is client-only.
+    ///
+    /// # Errors
+    /// Propagates socket/bind failures verbatim (§18).
+    pub fn bind(addr: SocketAddr, server: Option<quinn::ServerConfig>) -> MqlResult<Self> {
+        let endpoint = match server {
+            Some(config) => quinn::Endpoint::server(config, addr),
+            None => quinn::Endpoint::client(addr),
+        }
+        .map_err(|e| MqlError::Quic(format!("bind {addr} failed: {e}")))?;
+        Ok(Self { inner: endpoint })
+    }
+
+    /// Set the default client configuration (roots, keys) for outbound
+    /// connections from this endpoint.
+    pub fn set_default_client_config(&mut self, config: quinn::ClientConfig) {
+        self.inner.set_default_client_config(config);
+    }
+
+    /// Local address bound (useful with port 0).
+    ///
+    /// # Errors
+    /// Propagates socket introspection failures.
+    pub fn local_addr(&self) -> MqlResult<SocketAddr> {
+        self.inner
+            .local_addr()
+            .map_err(|e| MqlError::Quic(format!("local_addr failed: {e}")))
+    }
+
+    /// Connect outbound to `addr` (TLS `server_name` for verification).
+    ///
+    /// # Errors
+    /// Connection establishment failures.
+    pub async fn connect(&self, addr: SocketAddr, server_name: &str) -> MqlResult<quinn::Connection> {
+        self.inner
+            .connect(addr, server_name)
+            .map_err(|e| MqlError::Quic(format!("connect {addr} failed: {e}")))?
+            .await
+            .map_err(|e| MqlError::Quic(format!("handshake {addr} failed: {e}")))
+    }
+
+    /// Accept one inbound connection.
+    ///
+    /// # Errors
+    /// Accept/handshake failures. Returns `None` only when the endpoint is
+    /// closed — surfaced as an explicit error, never a silent stall.
+    pub async fn accept(&self) -> MqlResult<quinn::Connection> {
+        let incoming = self
+            .inner
+            .accept()
+            .await
+            .ok_or_else(|| MqlError::Quic("endpoint closed while accepting".to_string()))?;
+        incoming
+            .await
+            .map_err(|e| MqlError::Quic(format!("inbound handshake failed: {e}")))
+    }
+}
+
+/// Send one framed `Message` over a fresh bidirectional stream, then
+/// gracefully finish the send side. One message per stream keeps framing
+/// trivially parseable and matches the `keep_stream_open = false` profile;
+/// stream reuse is future work, not a semantic change.
+///
+/// # Errors
+/// Stream open/write/finish failures, or oversize messages.
+pub async fn send_message(
+    conn: &quinn::Connection,
+    msg: &Message,
+    config: &QuicAdapterConfig,
+) -> MqlResult<()> {
+    let bytes = encode_frame(msg, config)?;
+    let mut send = conn
+        .open_bi()
+        .await
+        .map_err(|e| MqlError::Quic(format!("open_bi failed: {e}")))?;
+    send.0
+        .write_all(&bytes)
+        .await
+        .map_err(|e| MqlError::Quic(format!("write failed: {e}")))?;
+    send
+        .0
+        .finish()
+        .map_err(|e| MqlError::Quic(format!("finish failed: {e}")))?;
+    Ok(())
+}
+
+/// Accept one bidirectional stream and decode one framed `Message`.
+///
+/// # Errors
+/// Accept/read/decode failures, or frames exceeding `config.max_message_bytes`.
+pub async fn recv_message(
+    conn: &quinn::Connection,
+    config: &QuicAdapterConfig,
+) -> MqlResult<Message> {
+    let mut streams = conn
+        .accept_bi()
+        .await
+        .map_err(|e| MqlError::Quic(format!("accept_bi failed: {e}")))?;
+    let mut len_buf = [0u8; 4];
+    streams
+        .1
+        .read_exact(&mut len_buf)
+        .await
+        .map_err(|e| MqlError::Quic(format!("read length failed: {e}")))?;
+    let len = u32::from_be_bytes(len_buf) as usize;
+    if len > config.max_message_bytes {
+        return Err(MqlError::Quic(format!(
+            "frame length {len} B exceeds max {} B",
+            config.max_message_bytes
+        )));
+    }
+    let mut body = vec![0u8; len];
+    streams
+        .1
+        .read_exact(&mut body)
+        .await
+        .map_err(|e| MqlError::Quic(format!("read body failed: {e}")))?;
+    serde_json::from_slice(&body).map_err(|e| MqlError::Quic(format!("json decode failed: {e}")))
 }
 
 #[cfg(test)]
@@ -152,5 +287,45 @@ mod tests {
         assert_eq!(n1 + n2, stream.len());
         assert_eq!(m1, m2);
         let _ = &mut stream;
+    }
+
+    /// Loopback over real QUIC (ephemeral 127.0.0.1 ports, throwaway
+    /// self-signed cert): send → receive preserves the `Message` bit-for-bit
+    /// (invariant 12 across the socket layer, not just the codec).
+    #[tokio::test]
+    async fn loopback_send_recv_preserves_message() {
+        use std::sync::Arc;
+
+        let certified = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
+        let key = quinn::rustls::pki_types::PrivateKeyDer::Pkcs8(
+            certified.signing_key.serialize_der().into(),
+        );
+        let server_config =
+            quinn::ServerConfig::with_single_cert(vec![certified.cert.der().clone()], key).unwrap();
+        let mut roots = quinn::rustls::RootCertStore::empty();
+        roots.add(certified.cert.der().clone()).unwrap();
+        let client_config =
+            quinn::ClientConfig::with_root_certificates(Arc::new(roots)).unwrap();
+
+        let server =
+            QuinnEndpoint::bind("127.0.0.1:0".parse().unwrap(), Some(server_config)).unwrap();
+        let server_addr = server.local_addr().unwrap();
+        let mut client_ep =
+            QuinnEndpoint::bind("127.0.0.1:0".parse().unwrap(), None).unwrap();
+        client_ep.set_default_client_config(client_config);
+
+        let cfg = QuicAdapterConfig::default();
+        let expected = message();
+        // Join, don't sequence: under a current-thread runtime the server
+        // future must be polled for its side of the handshake to progress.
+        let (conn_client, conn_server) = tokio::join!(
+            client_ep.connect(server_addr, "localhost"),
+            server.accept()
+        );
+        let conn_client = conn_client.unwrap();
+        let conn_server = conn_server.unwrap();
+        send_message(&conn_client, &expected, &cfg).await.unwrap();
+        let got = recv_message(&conn_server, &cfg).await.unwrap();
+        assert_eq!(expected, got, "QUIC socket must preserve semantics (inv 12)");
     }
 }

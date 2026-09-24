@@ -14,10 +14,14 @@ serde.workspace = true
 serde_json.workspace = true
 rand.workspace = true
 thiserror.workspace = true
+quinn.workspace = true
+rustls.workspace = true
+tokio.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
 ed25519-dalek.workspace = true
+rcgen.workspace = true
 
 [lints]
 workspace = true

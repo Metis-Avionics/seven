@@ -62,6 +62,13 @@ postcard-bench = { package = "postcard", version = "1", features = ["alloc"] }
 borsh = { version = "1", features = ["derive"] }
 helix-db = "3.0.0"
 tokio = { version = "=1.52.4", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
+# Phase 8 QUIC sockets: quinn 0.11 (resolves against the pinned tokio, verified
+# by spike; single tokio in the graph). rustls for endpoint config types;
+# rcgen mints self-signed certs in tests only — Seven never invents PKI for
+# deployments (callers supply ServerConfig/ClientConfig).
+quinn = "0.11"
+rustls = "0.23"
+rcgen = "0.14"
 criterion = { version = "0.5", features = ["html_reports"] }
 # Test deps are workspace-level so members declare them via workspace=true.
 proptest = "1"

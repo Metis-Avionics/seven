@@ -52,7 +52,7 @@ come from crates.io (decision `specs/decisions/0003-themql-sourcing.md`).
 ## Verification gates
 
 ```bash
-cargo nextest run --workspace --no-fail-fast          # 65 tests, must be green
+cargo nextest run --workspace --no-fail-fast          # 66 tests, must be green
 cargo clippy --workspace --all-targets -- -D warnings # must be silent
 SEVEN_HELIX_LIVE=1 cargo nextest run -p seven-helix   # requires helix dev up
 cargo bench -p seven-core --bench canonical_codec     # codec decision evidence
